@@ -7,17 +7,22 @@ if (mongoose.models.Destination) {
 
 const DestinationSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  description: String,
-  history: String,
-  vibe: String,
-  best_time: String,
+  description: { type: String, default: '' },
+  history: { type: String, default: '' },
+  vibe: { type: String, default: '' },
+  best_time: { type: String, default: '' },
 
-  // ✅ THE UNIVERSAL FIX: "Mixed" accepts Arrays, Objects, or Strings.
-  // This prevents the "CastError" completely.
+  // Essentials (used by UI cards)
+  currency: { type: String, default: '' },
+  language: { type: String, default: '' },
+  timezone: { type: String, default: '' },
+
+  // ✅ "Mixed" prevents CastError if the AI changes structure slightly.
   attractions: { type: mongoose.Schema.Types.Mixed, default: [] },
-
   accessibility: { type: mongoose.Schema.Types.Mixed, default: {} },
-  local_rules: { type: mongoose.Schema.Types.Mixed, default: [] }
-});
+  connectivity: { type: mongoose.Schema.Types.Mixed, default: {} },
+  local_rules: { type: mongoose.Schema.Types.Mixed, default: [] },
+  emergency: { type: mongoose.Schema.Types.Mixed, default: {} },
+}, { timestamps: true });
 
 export default mongoose.models.Destination || mongoose.model('Destination', DestinationSchema);
