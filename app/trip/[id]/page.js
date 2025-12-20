@@ -6,9 +6,9 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import WeatherWidget from '@/components/WeatherWidget';
 import BookingCard from '@/components/BookingCard';
-import ExpenseTracker from '@/components/ExpenseTracker'; // <--- IMPORT THIS
 import DownloadPdfBtn from '@/components/DownloadPdfBtn';
 import EventsCard from '@/components/EventsCard';
+import ExpenseDashboard from '@/components/ExpenseDashboard';
 
 // Load the map ONLY on the client side
 const TripMap = dynamic(() => import('@/components/TripMap'), {
@@ -233,7 +233,7 @@ export default function TripPage() {
 
         {/* WEATHER */}
         <WeatherWidget city={trip.destination.name} />
-        
+
         {/* NEW: LIVE EVENTS CARD */}
         <EventsCard destinationName={trip.destination.name} />
 
@@ -278,26 +278,26 @@ export default function TripPage() {
         {/* LOGISTICS & INTEL SECTION */}
         {trip.destination && (
           <div className="space-y-6 mb-8">
-            
+
             {/* 1. THE VIBE & HISTORY CARD (New!) */}
             <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm">
               <div className="mb-6">
-                 <h2 className="text-2xl font-bold text-slate-800 mb-2">About {trip.destination.name}</h2>
-                 {trip.destination.vibe ? (
-                   <p className="text-slate-600 leading-relaxed italic">“{trip.destination.vibe}”</p>
-                 ) : (
-                   <p className="text-slate-600 leading-relaxed">A quick intro will appear here as the destination profile fills in.</p>
-                 )}
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">About {trip.destination.name}</h2>
+                {trip.destination.vibe ? (
+                  <p className="text-slate-600 leading-relaxed italic">“{trip.destination.vibe}”</p>
+                ) : (
+                  <p className="text-slate-600 leading-relaxed">A quick intro will appear here as the destination profile fills in.</p>
+                )}
               </div>
-              
+
               <div className="grid md:grid-cols-2 gap-8">
                 <div>
-                   <h3 className="font-bold text-slate-900 mb-2 flex items-center gap-2">🏰 History & Culture</h3>
-                   <p className="text-sm text-slate-600 leading-relaxed">{trip.destination.history || trip.destination.description}</p>
+                  <h3 className="font-bold text-slate-900 mb-2 flex items-center gap-2">🏰 History & Culture</h3>
+                  <p className="text-sm text-slate-600 leading-relaxed">{trip.destination.history || trip.destination.description}</p>
                 </div>
                 <div>
-                   <h3 className="font-bold text-slate-900 mb-2 flex items-center gap-2">🗓️ Best Time to Visit</h3>
-                   <p className="text-sm text-slate-600">{trip.destination.best_time || "All year round"}</p>
+                  <h3 className="font-bold text-slate-900 mb-2 flex items-center gap-2">🗓️ Best Time to Visit</h3>
+                  <p className="text-sm text-slate-600">{trip.destination.best_time || "All year round"}</p>
                 </div>
               </div>
             </div>
@@ -377,23 +377,6 @@ export default function TripPage() {
           nearestStation={accessibility?.nearest_railway?.name}
         />
 
-        {/* --- EXPENSE TRACKER (Replaces old Budget Card) --- */}
-        <ExpenseTracker
-          tripId={trip._id}
-          budget={trip.budget_limit}
-          expenses={trip.expenses}
-          onExpenseUpdate={(newExpenses) => {
-            // 1. Update the expenses list
-            // 2. Also update the 'total_actual_cost' so the budget bar moves instantly
-            const newTotal = newExpenses.reduce((sum, item) => sum + (item.amount || 0), 0);
-            setTrip(prev => ({
-              ...prev,
-              expenses: newExpenses,
-              total_actual_cost: newTotal
-            }));
-          }}
-        />
-        {/* -------------------------------------------------- */}
 
 
         {/* ITINERARY & MAP SECTION */}
@@ -471,7 +454,15 @@ export default function TripPage() {
           )}
         </div>
 
+<div className="mt-12">
+        <h2 className="text-3xl font-bold mb-6">💰 Budget & Expenses</h2>
+        {trip && <ExpenseDashboard trip={trip} setTrip={setTrip} />}
       </div>
+
+      </div>
+
+      
+
     </div>
   );
 }

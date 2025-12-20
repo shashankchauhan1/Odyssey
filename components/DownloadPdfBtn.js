@@ -46,20 +46,88 @@ export default function DownloadPdfBtn({ trip }) {
       styles: { fontSize: 10, cellPadding: 3 },
     });
 
-    // 4. Footer (Expenses) - Use 'lastAutoTable.finalY' from the doc
-    const finalY = (doc.lastAutoTable?.finalY || 45) + 10;
+    // 4. Expense Breakdown by Category
+    let currentY = (doc.lastAutoTable?.finalY || 45) + 15;
     
+    doc.setFontSize(16);
+    doc.setTextColor(0);
+    doc.text("Expense Summary", 14, currentY);
+    
+    // Calculate expenses by category
+    const expensesByCategory = {};
+    const expenses = trip.expenses || [];
+    
+    expenses.forEach(expense => {
+      const category = expense.category || 'Misc';
+      if (!expensesByCategory[category]) {
+        expensesByCategory[category] = { total: 0, count: 0, items: [] };
+      }
+      expensesByCategory[category].total += expense.amount;
+      expensesByCategory[category].count += 1;
+      expensesByCategory[category].items.push(expense);
+    });
+    
+    currentY += 10;
+    
+    // Create expense breakdown table
+    const categoryRows = [];
+    const categories = ['Food', 'Travel', 'Stay', 'Activities', 'Shopping', 'Misc'];
+    
+    categories.forEach(category => {
+      if (expensesByCategory[category]) {
+        const data = expensesByCategory[category];
+        categoryRows.push([
+          category,
+          data.count.toString(),
+          `Rs.${data.total.toLocaleString()}`
+        ]);
+        
+        // Add individual items
+        data.items.forEach(item => {
+          categoryRows.push([
+            `  - ${item.description}`,
+            new Date(item.date).toLocaleDateString('en-IN'),
+            `Rs.${item.amount}`
+          ]);
+        });
+      }
+    });
+    
+    if (categoryRows.length > 0) {
+      autoTable(doc, {
+        startY: currentY,
+        head: [['Category / Description', 'Date / Count', 'Amount']],
+        body: categoryRows,
+        theme: 'striped',
+        headStyles: { fillColor: [139, 92, 246] }, // Purple
+        styles: { fontSize: 9, cellPadding: 2 },
+        columnStyles: {
+          0: { cellWidth: 80 },
+          1: { cellWidth: 50 },
+          2: { cellWidth: 40, halign: 'right' }
+        }
+      });
+      
+      currentY = doc.lastAutoTable.finalY + 10;
+    }
+    
+    // Budget Summary
     doc.setFontSize(14);
     doc.setTextColor(0);
-    doc.text("Expense Summary", 14, finalY);
+    doc.text("Budget Overview", 14, currentY);
     
-    doc.setFontSize(10);
-    doc.text(`Total Budget: Rs.${trip.budget_limit}`, 14, finalY + 8);
-    doc.text(`Actual Spent: Rs.${trip.total_actual_cost}`, 14, finalY + 14);
+    currentY += 8;
+    doc.setFontSize(11);
+    doc.text(`Total Budget: Rs.${trip.budget_limit.toLocaleString()}`, 14, currentY);
     
+    currentY += 6;
+    doc.setTextColor(139, 92, 246); // Purple
+    doc.text(`Total Spent: Rs.${trip.total_actual_cost.toLocaleString()}`, 14, currentY);
+    
+    currentY += 6;
     const remaining = trip.budget_limit - trip.total_actual_cost;
-    doc.setTextColor(remaining < 0 ? 200 : 0, 0, 0); // Red if over budget
-    doc.text(`Remaining: Rs.${remaining}`, 14, finalY + 20);
+    doc.setTextColor(remaining < 0 ? 220 : 16, remaining < 0 ? 38 : 185, remaining < 0 ? 38 : 129); // Red or Green
+    doc.text(`Remaining: ${remaining < 0 ? '-' : ''}Rs.${Math.abs(remaining).toLocaleString()}`, 14, currentY);
 
     // 5. Save
     doc.save(`Trip_to_${trip.destination.name}.pdf`);
