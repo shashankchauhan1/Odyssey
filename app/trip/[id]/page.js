@@ -230,11 +230,7 @@ export default function TripPage() {
               <span>{trip.travelers} Travelers</span>
             </div>
 
-<<<<<<< HEAD
-            {/* Download pdf */}
-            <DownloadPdfBtn trip={trip} />
-=======
-            {/* NEW PDF BUTTON */}
+            {/* Action buttons */}
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowShareModal(true)}
@@ -244,7 +240,6 @@ export default function TripPage() {
               </button>
               <DownloadPdfBtn trip={trip} />
             </div>
->>>>>>> 5a9b8bb565a9867f698f3e37c70cc82658f196dc
 
           </div>
 
@@ -257,9 +252,7 @@ export default function TripPage() {
         {/* weather */}
         <WeatherWidget city={trip.destination.name} />
 
-<<<<<<< HEAD
         {/* live events card */}
-=======
         {/* COLLABORATORS */}
         <div className="mt-6 mb-6 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
           <div className="flex items-center justify-between gap-3 mb-3">
@@ -304,7 +297,6 @@ export default function TripPage() {
         </div>
 
         {/* NEW: LIVE EVENTS CARD */}
->>>>>>> 5a9b8bb565a9867f698f3e37c70cc82658f196dc
         <EventsCard destinationName={trip.destination.name} />
 
         {/* quick essentials  */}
@@ -443,9 +435,6 @@ export default function TripPage() {
           </div>
         )}
 
-<<<<<<< HEAD
-        {/* booking links */}
-=======
         <SafetyWidget
           tripId={trip._id}
           alerts={trip.safety_alerts || []}
@@ -455,7 +444,6 @@ export default function TripPage() {
         <VideoGallery videoIds={destination.video_ids || []} />
 
         {/* BOOKING LINKS */}
->>>>>>> 5a9b8bb565a9867f698f3e37c70cc82658f196dc
         <BookingCard
           destinationName={trip.destination.name}
           nearestStation={accessibility?.nearest_railway?.name}
@@ -545,8 +533,6 @@ export default function TripPage() {
 
       </div>
 
-<<<<<<< HEAD
-=======
       
 
       <ShareTripModal
@@ -560,7 +546,6 @@ export default function TripPage() {
         }}
       />
 
->>>>>>> 5a9b8bb565a9867f698f3e37c70cc82658f196dc
     </div>
   );
 }

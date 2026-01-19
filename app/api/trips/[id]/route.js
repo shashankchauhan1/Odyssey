@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Trip from '@/models/Trip';
 import Destination from '@/models/Destination';
-import { auth } from '@clerk/nextjs/server';
-import Destination from '@/models/Destination'; 
 import { auth, currentUser } from '@clerk/nextjs/server';
 
 // GET Single Trip
