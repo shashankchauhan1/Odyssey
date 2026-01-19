@@ -5,7 +5,7 @@ import Trip from '@/models/Trip';
 import Destination from '@/models/Destination';
 import { auth } from '@clerk/nextjs/server';
 =======
-import Destination from '@/models/Destination'; // 👈 CRITICAL MISSING LINE!
+import Destination from '@/models/Destination'; 
 import { auth, currentUser } from '@clerk/nextjs/server';
 >>>>>>> 5a9b8bb565a9867f698f3e37c70cc82658f196dc
 
