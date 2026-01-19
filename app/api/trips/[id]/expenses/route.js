@@ -8,13 +8,11 @@ export async function POST(request, { params }) {
   try {
     await connectDB();
     const { userId } = await auth(); // Optional: Check if user owns the trip
-<<<<<<< HEAD
-=======
+
     const user = await currentUser();
     const email = user?.primaryEmailAddress?.emailAddress?.toLowerCase?.();
     
     // --- NEXT.JS 15 FIX ---
->>>>>>> 5a9b8bb565a9867f698f3e37c70cc82658f196dc
     const { id } = await params; 
 
     const { description, title, amount, category, date } = await request.json();  // fetch fields
