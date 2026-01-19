@@ -17,8 +17,6 @@ export async function POST(request) {
     const trip = await Trip.findById(tripId).populate('destination');
     if (!trip) return NextResponse.json({ success: false, error: "Trip not found" }, { status: 404 });
 
-<<<<<<< HEAD
-=======
     const isOwner = trip.userId === userId;
     const isCollaborator =
       trip.collaborators?.some((c) => c.userId === userId || (email && c.email?.toLowerCase() === email));
@@ -28,7 +26,6 @@ export async function POST(request) {
 
     console.log(`🤖 Groq is planning: ${trip.destination.name}...`);
 
->>>>>>> 5a9b8bb565a9867f698f3e37c70cc82658f196dc
     const prompt = `
       Generate a ${days}-day itinerary for "${trip.destination.name}".
       Preferences: Pace: ${pace}, Interests: ${interests?.join(", ")}.
