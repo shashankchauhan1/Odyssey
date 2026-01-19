@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Trip from '@/models/Trip';
-<<<<<<< HEAD
 import Destination from '@/models/Destination';
 import { auth } from '@clerk/nextjs/server';
-=======
 import Destination from '@/models/Destination'; 
 import { auth, currentUser } from '@clerk/nextjs/server';
->>>>>>> 5a9b8bb565a9867f698f3e37c70cc82658f196dc
 
 // GET Single Trip
 export async function GET(request, { params }) {
