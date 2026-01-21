@@ -7,8 +7,15 @@ export async function POST(request, { params }) {
   try {
     await connectDB();
     const { userId } = await auth();
-    const user = await currentUser();
+
+    const user = await currentUser(); // fetching user name
+
     const email = user?.primaryEmailAddress?.emailAddress?.toLowerCase?.();
+    const displayName =
+       user?.firstName && user?.lastName
+    ? `${user.firstName} ${user.lastName}`
+    : user?.firstName || user?.fullName || user?.username || email || "Unknown";
+
     const { id } = await params;
 
     const { message = '', coords = {} } = await request.json();
@@ -27,7 +34,10 @@ export async function POST(request, { params }) {
     }
 
     const alert = {
-      senderId: userId || '',
+      sender: {
+        id: userId || '',
+        name: displayName,
+      },
       message,
       coords: {
         lat: typeof lat === 'number' ? lat : null,

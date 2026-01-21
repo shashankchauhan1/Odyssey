@@ -1,7 +1,10 @@
 'use client';
 
 export default function VideoGallery({ videoIds = [] }) {
+  // Defensive check: Ensure it's an array and take top 3
   const ids = Array.isArray(videoIds) ? videoIds.slice(0, 3) : [];
+
+  // If no videos found, hide the component completely (don't show "Loading")
   if (ids.length === 0) return null;
 
   return (

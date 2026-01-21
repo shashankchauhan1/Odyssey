@@ -7,6 +7,7 @@ export default function SafetyWidget({ tripId, alerts = [], onAlertsUpdate }) {
   const [error, setError] = useState('');
 
   const sendAlert = (coords) => {
+    console.log(alerts);
     setLoading(true);
     setError('');
     fetch(`/api/trips/${tripId}/safety`, {
@@ -17,6 +18,7 @@ export default function SafetyWidget({ tripId, alerts = [], onAlertsUpdate }) {
       .then((r) => r.json())
       .then((json) => {
         if (!json.success) throw new Error(json.error || 'Failed to send alert');
+
         onAlertsUpdate?.(json.data);
       })
       .catch((err) => setError(err.message || 'Failed to send alert'))
@@ -24,6 +26,7 @@ export default function SafetyWidget({ tripId, alerts = [], onAlertsUpdate }) {
   };
 
   const handleClick = () => {
+
     if (!navigator?.geolocation) {
       setError('Geolocation not supported');
       return;
@@ -44,6 +47,12 @@ export default function SafetyWidget({ tripId, alerts = [], onAlertsUpdate }) {
       },
       { enableHighAccuracy: true, timeout: 8000 }
     );
+  };
+
+  // see current location of the sender
+  const openInMaps = (lat, lng) => {
+    const url = `https://www.google.com/maps?q=${lat},${lng}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -73,15 +82,26 @@ export default function SafetyWidget({ tripId, alerts = [], onAlertsUpdate }) {
         {(alerts || []).map((alert, idx) => (
           <div key={idx} className="rounded-lg bg-white border border-amber-100 p-3 text-xs text-amber-900">
             <div className="flex justify-between items-center gap-2">
-              <span className="font-bold">{alert.message || 'Check-in'}</span>
+              <span className="font-bold">
+                {alert.sender?.name || "Unknown"} — {alert.message || "Check-in"}
+              </span>
+
               <span className="text-[10px] text-amber-600">
                 {alert.timestamp ? new Date(alert.timestamp).toLocaleString() : ''}
               </span>
             </div>
             {alert.coords?.lat && alert.coords?.lng && (
-              <p className="text-[11px] text-amber-700 mt-1">
-                Lat: {alert.coords.lat.toFixed(4)}, Lng: {alert.coords.lng.toFixed(4)}
-              </p>
+              <div className="mt-1 flex items-center justify-between">
+                <p className="text-[11px] text-amber-700">
+                  Lat: {alert.coords.lat.toFixed(4)}, Lng: {alert.coords.lng.toFixed(4)}
+                </p>
+                <button
+                  onClick={() => openInMaps(alert.coords.lat, alert.coords.lng)}
+                  className="text-[11px] font-bold text-amber-600 hover:underline"
+                >
+                  📍 View on Map
+                </button>
+              </div>
             )}
           </div>
         ))}

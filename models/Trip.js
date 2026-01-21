@@ -49,7 +49,10 @@ const TripSchema = new mongoose.Schema({
 
   // Safety beacon / SOS check-ins
   safety_alerts: [{
-    senderId: { type: String },
+    sender: { 
+      id: String,
+      name: String
+    },
     message: { type: String, default: '' },
     coords: {
       lat: { type: Number },

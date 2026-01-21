@@ -26,7 +26,8 @@ const DestinationSchema = new mongoose.Schema({
   emergency: { type: mongoose.Schema.Types.Mixed, default: {} },
 
   // Media / Language helpers
-  video_ids: { type: [String], default: [] },
+  video_ids: [{ type: String }],
+
   essential_phrases: { type: mongoose.Schema.Types.Mixed, default: [] },
 }, { timestamps: true });
 

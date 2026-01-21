@@ -62,12 +62,16 @@ export default function TripPage() {
 
     // fetch the crucial data (currency, language, airport etc. then)
     const dest = trip?.destination || {};
+    // Check if video_ids is missing or empty
+    const hasVideos = Array.isArray(dest?.video_ids) && dest.video_ids.length > 0;
+
     const needsEnrichment =
       !dest?.currency ||
       !dest?.language ||
       !dest?.connectivity?.sim ||
       !dest?.accessibility?.nearest_airport ||
-      !(Array.isArray(dest?.local_rules) && dest.local_rules.length > 0);
+      !(Array.isArray(dest?.local_rules) && dest.local_rules.length > 0) ||
+      !hasVideos;
 
     if (!needsEnrichment || !dest?._id) return;
 
@@ -366,6 +370,11 @@ export default function TripPage() {
               </div>
             </div>
 
+            {/* youtube video links */}
+            <div className="mt-6">
+               <VideoGallery videoIds={trip.destination.video_ids} />
+            </div>
+
             {/* logistic card */}
             <div className="grid sm:grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               <div className="bg-white p-4 sm:p-6 rounded-xl border border-gray-200 shadow-sm">
@@ -441,7 +450,7 @@ export default function TripPage() {
           onAlertsUpdate={(alerts) => setTrip((prev) => ({ ...prev, safety_alerts: alerts }))}
         />
 
-        <VideoGallery videoIds={destination.video_ids || []} />
+        {/* <VideoGallery videoIds={destination.video_ids || []} /> */}
 
         {/* BOOKING LINKS */}
         <BookingCard
