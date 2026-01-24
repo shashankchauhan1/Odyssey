@@ -139,7 +139,12 @@ export default function Dashboard() {
 
         <div className="mx-auto max-w-6xl px-4 sm:px-6 py-12 sm:py-20 text-center">
           <p className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold tracking-wide text-white/90">
-            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            <SignedIn>
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            </SignedIn>
+            <SignedOut>
+              <span className="h-2 w-2 rounded-full bg-red-400" />
+            </SignedOut>
             Plan faster. Travel smarter.
           </p>
 

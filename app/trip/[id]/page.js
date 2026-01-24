@@ -450,15 +450,11 @@ export default function TripPage() {
           onAlertsUpdate={(alerts) => setTrip((prev) => ({ ...prev, safety_alerts: alerts }))}
         />
 
-        {/* <VideoGallery videoIds={destination.video_ids || []} /> */}
-
         {/* BOOKING LINKS */}
         <BookingCard
           destinationName={trip.destination.name}
           nearestStation={accessibility?.nearest_railway?.name}
         />
-
-
 
         {/* itinerary & map section */}
         <div className="mt-8 sm:mt-12">
@@ -541,8 +537,6 @@ export default function TripPage() {
       </div>
 
       </div>
-
-      
 
       <ShareTripModal
         tripId={trip._id}

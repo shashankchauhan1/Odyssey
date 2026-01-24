@@ -27,7 +27,7 @@ export default function Navbar() {
           <span className="inline-flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm text-sm sm:text-base">
             O
           </span>
-          <span className="hidden sm:inline">Odyssey</span>
+          <span className="">Odyssey</span>
         </Link>
 
         {/* laptop/desktop navigation */}
