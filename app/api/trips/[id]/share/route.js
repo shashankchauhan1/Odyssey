@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import connectDB from '@/lib/db';
-import Destination from '@/models/Destination'; // ✅ Ensure this is imported for populate to work
+import Destination from '@/models/Destination'; // Ensure this is imported for populate to work
 import Trip from '@/models/Trip';
 import { sendInviteEmail } from '@/lib/mailer';
 

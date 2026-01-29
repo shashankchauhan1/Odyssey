@@ -18,13 +18,13 @@ export default function ExpenseDashboard({ trip, setTrip }) {
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(null);
   const [newExpense, setNewExpense] = useState({ description: '', amount: '', category: 'Food' });
-  const conversionRate = 0.8; // 1 local unit = 0.8 home unit (mock)
+  // const conversionRate = 0.8; // 1 local unit = 0.8 home unit (mock)
 
-  const convertAmount = (amount) => {
-    const num = Number(amount);
-    if (Number.isNaN(num)) return null;
-    return Math.round(num * conversionRate);
-  };
+  // const convertAmount = (amount) => {
+  //   const num = Number(amount);
+  //   if (Number.isNaN(num)) return null;
+  //   return Math.round(num * conversionRate);
+  // };
 
   // Calculate Data for Charts
   const totalSpent = trip.total_actual_cost || 0;
@@ -279,10 +279,11 @@ export default function ExpenseDashboard({ trip, setTrip }) {
                         <span className="text-xs px-2 py-0.5 bg-white rounded-full font-medium text-gray-600 border border-gray-200">
                           {expense.category}
                         </span>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs w-20 text-gray-500">
                           {new Date(expense.date).toLocaleDateString('en-IN', { 
                             day: 'numeric', 
-                            month: 'short' 
+                            month: 'short',
+                            year: 'numeric'
                           })}
                         </span>
                       </div>
@@ -291,16 +292,12 @@ export default function ExpenseDashboard({ trip, setTrip }) {
                   <div className="flex items-center gap-3">
                     <span className="font-bold text-gray-900 text-lg">
                       -₹{expense.amount.toLocaleString()}
-                      {convertAmount(expense.amount) !== null && (
-                        <span className="ml-2 text-xs text-gray-500">
-                          (≈ ₹{convertAmount(expense.amount).toLocaleString()} home)
-                        </span>
-                      )}
                     </span>
+                    
                     <button
                       onClick={() => handleDeleteExpense(expense._id)}
                       disabled={deleting === expense._id}
-                      className="opacity-0 group-hover:opacity-100 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
+                      className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
                       title="Delete expense"
                     >
                       {deleting === expense._id ? (

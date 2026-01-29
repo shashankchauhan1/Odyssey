@@ -128,7 +128,7 @@ export default function ExpenseTracker({ tripId, budget, expenses = [], onExpens
               {/* delete button visible only on hover */}
               <button 
                 onClick={() => handleDelete(exp._id)} 
-                className="text-gray-300 hover:text-red-500 font-bold px-1 transition text-lg leading-none"
+                className="text-gray-400 hover:text-red-500 font-bold px-1 transition text-lg leading-none"
                 title="Delete"
               >
                 ×
