@@ -29,10 +29,10 @@ export async function POST(request) {
     // app/api/trips/generate/route.js
 
     const prompt = `
-      Generate a ${days}-day ${pace} itinerary for a trip to ${destinationName} based on these interests: ${interests.join(", ")}.
+      Generate a ${days}-day ${pace} itinerary for a trip to ${trip.destination.name} based on these interests: ${interests.join(", ")}.
 
       CRITICAL RULES FOR COSTS:
-      1. Estimate costs in the **LOCAL CURRENCY** of ${destinationName} (e.g., CHF for Switzerland, JPY for Japan, EUR for France).
+      1. Estimate costs in the **LOCAL CURRENCY** of ${trip.destination.name} (e.g., CHF for Switzerland, JPY for Japan, EUR for France).
       2. Do NOT convert to INR. Keep it local.
       3. Provide the ISO currency code (e.g., "CHF", "USD", "EUR").
 
