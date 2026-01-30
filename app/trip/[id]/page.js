@@ -53,9 +53,20 @@ export default function TripPage() {
   }, [id]);
 
   useEffect(() => {
+    // 1. Fetch immediately on load
     fetchTrip();
-  }, [fetchTrip]);
 
+    // 2. Set up the "Heartbeat" (Silent Background Refresh)
+    const intervalId = setInterval(() => {
+      // This calls your existing fetchTrip function
+      // It updates 'trip' state -> which updates ExpenseDashboard automatically
+      fetchTrip(); 
+    }, 3000); // 3000ms = 3 seconds
+
+    // 3. Cleanup: Stop the timer when user leaves the page
+    return () => clearInterval(intervalId);
+  }, [fetchTrip]);
+ 
   // Auto-enrich old/sparse destination profiles so logistics cards don't stay blank
   useEffect(() => {
     if (!trip || enrichmentAttempted) return;
@@ -502,7 +513,14 @@ export default function TripPage() {
                             )}
                           </div>
                           <div className="text-left sm:text-right text-xs sm:text-sm font-extrabold text-slate-700 w-full sm:w-auto">
-                            {event.cost != null ? `₹${Number(event.cost).toLocaleString()}` : '—'}
+                            {event.cost != null ? (
+                              <span>
+                                {/* Show Currency Code if available, otherwise default to nothing */}
+                                {event.currency || ''} {Number(event.cost).toLocaleString()}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">Free</span>
+                            )}
                           </div>
                         </div>
                       ))}

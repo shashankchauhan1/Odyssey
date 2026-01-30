@@ -179,7 +179,7 @@ export default function DestinationDetail() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-slate-500">
-                    Budget (₹)
+                    Budget 
                   </label>
                   <input
                     type="number"
@@ -310,7 +310,7 @@ export default function DestinationDetail() {
                     <div className="text-sm font-bold text-amber-900 mt-1">
                       {lastMile?.mode || 'Taxi / local transport available'}
                       {lastMile?.avg_cost != null && (
-                        <span className="ml-2 text-amber-700">(approx ₹{lastMile.avg_cost})</span>
+                        <span className="ml-2 text-amber-700">(approx {lastMile.avg_cost})</span>
                       )}
                     </div>
                   </div>

@@ -95,7 +95,7 @@ export default function MyTrips() {
                         <div className="flex flex-wrap gap-2 sm:gap-4 mt-1 text-xs sm:text-sm text-gray-500">
                           <span>📅 {dateString}</span>
                           <span>👥 {trip.travelers} Travelers</span>
-                          <span>💰 ₹{trip.total_actual_cost} Spent</span>
+                          <span>💰 {trip.total_actual_cost} Spent</span>
                         </div>
                       </div>
                     </div>

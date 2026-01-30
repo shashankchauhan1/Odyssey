@@ -134,73 +134,76 @@ export default function Dashboard() {
     <div className="min-h-screen">
       {/* The top page */}
       <div className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-b from-slate-950 to-slate-900 text-white">
-        <div className="pointer-events-none absolute -left-40 -top-40 h-[520px] w-[520px] rounded-full bg-indigo-500/25 blur-3xl" />
-        <div className="pointer-events-none absolute -right-40 -top-32 h-[520px] w-[520px] rounded-full bg-sky-500/20 blur-3xl" />
+  
+  {/* FIX: Reduced size on mobile (h-64 w-64) -> Full size on laptop (sm:h-[520px]) */}
+  <div className="pointer-events-none absolute -left-20 -top-20 h-64 w-64 rounded-full bg-indigo-500/25 blur-3xl sm:-left-40 sm:-top-40 sm:h-[520px] sm:w-[520px]" />
+  
+  {/* FIX: Reduced size on mobile (h-64 w-64) -> Full size on laptop (sm:h-[520px]) */}
+  <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-sky-500/20 blur-3xl sm:-right-40 sm:-top-32 sm:h-[520px] sm:w-[520px]" />
 
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-12 sm:py-20 text-center">
-          <p className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold tracking-wide text-white/90">
-            <SignedIn>
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-            </SignedIn>
-            <SignedOut>
-              <span className="h-2 w-2 rounded-full bg-red-400" />
-            </SignedOut>
-            Plan faster. Travel smarter.
+  <div className="mx-auto max-w-6xl px-4 sm:px-6 py-12 sm:py-20 text-center">
+    <p className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold tracking-wide text-white/90">
+      <SignedIn>
+        <span className="h-2 w-2 rounded-full bg-emerald-400" />
+      </SignedIn>
+      <SignedOut>
+        <span className="h-2 w-2 rounded-full bg-red-400" />
+      </SignedOut>
+      Plan faster. Travel smarter.
+    </p>
+
+    <h1 className="text-balance text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight">
+      Where to next?
+    </h1>
+    <p className="mx-auto mt-4 max-w-2xl text-pretty text-sm text-white/80 sm:text-base px-4 sm:px-0">
+      Odyssey helps you build an itinerary, understand logistics, track spending, and export everything to PDF.
+    </p>
+
+    {/* Search Section */}
+    <div className="mx-auto mt-10 max-w-2xl px-4 sm:px-0">
+      <SignedIn>
+        <form onSubmit={handleInitialSearch} className="relative">
+          <input
+            type="text"
+            placeholder="Try: Kyoto, Paris, Goa…"
+            className="w-full rounded-full bg-white px-4 sm:px-5 py-3 sm:py-4 pr-24 sm:pr-28 text-sm sm:text-base text-slate-900 shadow-lg outline-none ring-1 ring-white/15 placeholder:text-slate-400 focus:ring-4 focus:ring-indigo-500/40"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <button
+            type="submit"
+            className="absolute right-2 top-2 rounded-full bg-indigo-600 px-4 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white shadow-md hover:bg-indigo-500 transition"
+          >
+            <span className="hidden sm:inline">Plan ➔</span>
+            <span className="sm:hidden">Plan</span>
+          </button>
+        </form>
+        <p className="mt-3 text-xs text-white/70 px-4 sm:px-0">
+          We'll ask for date, travelers, and budget before creating the trip.
+        </p>
+      </SignedIn>
+
+      <SignedOut>
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-left">
+          <p className="text-sm font-semibold">Sign in to start planning</p>
+          <p className="mt-1 text-sm text-white/75">
+            Create trips, generate itineraries, and track expenses.
           </p>
-
-          <h1 className="text-balance text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight">
-            Where to next?
-          </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-pretty text-sm text-white/80 sm:text-base px-4 sm:px-0">
-            Odyssey helps you build an itinerary, understand logistics, track spending, and export everything to PDF.
-          </p>
-
-          {/* Search if the user logged in */}
-          <div className="mx-auto mt-10 max-w-2xl px-4 sm:px-0">
-            <SignedIn>
-              <form onSubmit={handleInitialSearch} className="relative">
-                <input
-                  type="text"
-                  placeholder="Try: Kyoto, Paris, Goa…"
-                  className="w-full rounded-full bg-white px-4 sm:px-5 py-3 sm:py-4 pr-24 sm:pr-28 text-sm sm:text-base text-slate-900 shadow-lg outline-none ring-1 ring-white/15 placeholder:text-slate-400 focus:ring-4 focus:ring-indigo-500/40"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                <button
-                  type="submit"
-                  className="absolute right-2 top-2 rounded-full bg-indigo-600 px-4 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white shadow-md hover:bg-indigo-500 transition"
-                >
-                  <span className="hidden sm:inline">Plan ➔</span>
-                  <span className="sm:hidden">Plan</span>
-                </button>
-              </form>
-              <p className="mt-3 text-xs text-white/70 px-4 sm:px-0">
-                We'll ask for date, travelers, and budget before creating the trip.
-              </p>
-            </SignedIn>
-
-            {/* if signed out then show this UI */}
-            <SignedOut>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-left">
-                <p className="text-sm font-semibold">Sign in to start planning</p>
-                <p className="mt-1 text-sm text-white/75">
-                  Create trips, generate itineraries, and track expenses.
-                </p>
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <SignInButton mode="modal">
-                    <button className="rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-slate-900 hover:bg-slate-50 transition">
-                      Sign In
-                    </button>
-                  </SignInButton>
-                  <Link href="/logistics" className="text-sm font-semibold text-white/80 hover:text-white transition">
-                    See what Odyssey covers →
-                  </Link>
-                </div>
-              </div>
-            </SignedOut>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <SignInButton mode="modal">
+              <button className="rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-slate-900 hover:bg-slate-50 transition">
+                Sign In
+              </button>
+            </SignInButton>
+            <Link href="/logistics" className="text-sm font-semibold text-white/80 hover:text-white transition">
+              See what Odyssey covers →
+            </Link>
           </div>
         </div>
-      </div>
+      </SignedOut>
+    </div>
+  </div>
+</div>
 
       {/* CONTENT */}
       <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8 sm:py-14">
@@ -327,7 +330,7 @@ export default function Dashboard() {
                 <div className="mt-6 space-y-4">
                   <div>
                     <label className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-slate-500">
-                      Total Budget (₹)
+                      Total Budget 
                     </label>
                     <input
                       type="number"

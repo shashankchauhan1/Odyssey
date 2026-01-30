@@ -26,23 +26,31 @@ export async function POST(request) {
 
     console.log(`🤖 Groq is planning: ${trip.destination.name}...`);
 
+    // app/api/trips/generate/route.js
+
     const prompt = `
-      Generate a ${days}-day itinerary for "${trip.destination.name}".
-      Preferences: Pace: ${pace}, Interests: ${interests?.join(", ")}.
-      Return ONLY valid JSON. No code.
+      Generate a ${days}-day ${pace} itinerary for a trip to ${destinationName} based on these interests: ${interests.join(", ")}.
+
+      CRITICAL RULES FOR COSTS:
+      1. Estimate costs in the **LOCAL CURRENCY** of ${destinationName} (e.g., CHF for Switzerland, JPY for Japan, EUR for France).
+      2. Do NOT convert to INR. Keep it local.
+      3. Provide the ISO currency code (e.g., "CHF", "USD", "EUR").
+
+      Return a JSON object strictly following this schema:
       {
         "itinerary": [
           {
             "day": 1,
-            "theme": "Theme Title",
+            "theme": "Arrival & Exploration",
             "events": [
               {
-                "title": "Activity",
-                "type": "Sightseeing", 
+                "title": "Activity Name",
+                "description": "Brief description",
                 "startTime": "09:00",
                 "endTime": "11:00",
-                "cost": 500,
-                "description": "Desc"
+                "cost": 30,          // Just the number
+                "currency": "CHF",   // <--- NEW FIELD: The currency code
+                "type": "Adventure"
               }
             ]
           }

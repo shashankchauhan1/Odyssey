@@ -77,9 +77,9 @@ export default function ExpenseTracker({ tripId, budget, expenses = [], onExpens
       {/* progress bar */}
       <div className="mb-6">
         <div className="flex justify-between text-sm mb-2 font-medium">
-          <span className="text-slate-600">Spent: ₹{totalSpent.toLocaleString()}</span>
+          <span className="text-slate-600">Spent: {totalSpent.toLocaleString()}</span>
           <span className={remaining < 0 ? "text-red-500 font-bold" : "text-slate-600"}>
-            Left: ₹{remaining.toLocaleString()}
+            Left: {remaining.toLocaleString()}
           </span>
         </div>
         <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden">
@@ -101,7 +101,7 @@ export default function ExpenseTracker({ tripId, budget, expenses = [], onExpens
         />
         <input 
           type="number" 
-          placeholder="₹" 
+          placeholder="¤" 
           className="w-20 p-2 bg-gray-50 border rounded-lg text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition text-black"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
@@ -140,7 +140,7 @@ export default function ExpenseTracker({ tripId, budget, expenses = [], onExpens
             </div>
 
             <span className="font-bold text-slate-900">
-              -₹{exp.amount}
+              - {exp.amount}
             </span>
           </div>
         ))}

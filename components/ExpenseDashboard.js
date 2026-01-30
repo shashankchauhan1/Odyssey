@@ -98,7 +98,7 @@ export default function ExpenseDashboard({ trip, setTrip }) {
             <p className="text-indigo-100 text-xs sm:text-sm font-semibold uppercase tracking-wide">Total Budget</p>
             <Wallet className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-200" />
           </div>
-          <p className="text-2xl sm:text-3xl font-extrabold">₹{budget.toLocaleString()}</p>
+          <p className="text-2xl sm:text-3xl font-extrabold">{budget.toLocaleString()}</p>
         </div>
         
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-4 sm:p-6 rounded-2xl shadow-lg text-white transform hover:scale-105 transition-transform duration-200">
@@ -106,7 +106,7 @@ export default function ExpenseDashboard({ trip, setTrip }) {
             <p className="text-purple-100 text-xs sm:text-sm font-semibold uppercase tracking-wide">Total Spent</p>
             <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-purple-200" />
           </div>
-          <p className="text-2xl sm:text-3xl font-extrabold">₹{totalSpent.toLocaleString()}</p>
+          <p className="text-2xl sm:text-3xl font-extrabold">{totalSpent.toLocaleString()}</p>
           <div className="mt-2 w-full bg-purple-700/30 rounded-full h-2">
             <div 
               className="bg-white rounded-full h-2 transition-all duration-500"
@@ -123,7 +123,7 @@ export default function ExpenseDashboard({ trip, setTrip }) {
             <AlertCircle className={`w-4 h-4 sm:w-5 sm:h-5 ${isOverBudget ? 'text-red-200' : 'text-emerald-200'}`} />
           </div>
           <p className="text-2xl sm:text-3xl font-extrabold">
-            {isOverBudget && '-'}₹{Math.abs(remaining).toLocaleString()}
+            {isOverBudget && '-'}{Math.abs(remaining).toLocaleString()}
           </p>
           {isOverBudget && (
             <p className="text-[10px] sm:text-xs text-red-100 mt-2">Consider adjusting your spending</p>
@@ -212,7 +212,7 @@ export default function ExpenseDashboard({ trip, setTrip }) {
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Amount (₹)</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Amount (¤)</label>
                 <input 
                   type="number" 
                   required
@@ -291,7 +291,7 @@ export default function ExpenseDashboard({ trip, setTrip }) {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="font-bold text-gray-900 text-lg">
-                      -₹{expense.amount.toLocaleString()}
+                      -{expense.amount.toLocaleString()}
                     </span>
                     
                     <button
