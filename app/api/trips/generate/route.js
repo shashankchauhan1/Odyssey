@@ -49,7 +49,7 @@ export async function POST(request) {
                 "startTime": "09:00",
                 "endTime": "11:00",
                 "cost": 30,          // Just the number
-                "currency": "CHF",   // <--- NEW FIELD: The currency code
+                "currency": "CHF",   //
                 "type": "Adventure"
               }
             ]

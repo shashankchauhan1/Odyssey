@@ -48,7 +48,7 @@ export default function WeatherWidget({ city }) {
 
         // Fetch Weather ---
         const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&elevation=${elevation}&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=auto`;
-        
+
         const weatherRes = await fetch(weatherUrl);
         if (!weatherRes.ok) {
           throw new Error(`Weather fetch failed with status ${weatherRes.status}`);
@@ -94,7 +94,7 @@ export default function WeatherWidget({ city }) {
   };
 
   if (loading) return <div className="h-24 bg-blue-50 animate-pulse rounded-xl mb-6"></div>;
-  
+
   // If we can't find the weather, just hide the widget instead of crashing
   if (error || !weather) return null;
 
@@ -103,7 +103,12 @@ export default function WeatherWidget({ city }) {
       <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
 
       <div>
-        <h3 className="text-blue-100 font-bold text-sm uppercase tracking-wider mb-1">Current Weather</h3>
+        <h3 className="text-blue-100 font-bold text-sm uppercase tracking-wider mb-1 flex items-baseline gap-2">
+          Current Weather
+          <span className="text-xs font-normal normal-case text-grey">
+            • Updated 1h ago
+          </span>
+        </h3>
         <div className="flex items-center gap-4">
           <span className="text-5xl">{getWeatherIcon(weather.code)}</span>
           <div>
