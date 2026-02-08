@@ -119,11 +119,11 @@ export default function WeatherWidget({ city }) {
   if (loading) return <div className="h-24 bg-blue-50 animate-pulse rounded-xl mb-6 flex items-center justify-center text-blue-300 text-sm font-medium">Loading weather...</div>;
 
   if (error) return (
-    <div className="bg-red-50 text-red-500 p-4 rounded-xl mb-6 flex items-center justify-between">
-      <span className="text-sm font-medium">Unable to load weather.</span>
+    <div className="bg-red-50 text-red-500 p-4 rounded-xl mb-6 flex items-center justify-between gap-3 shadow-inner">
+      <span className="text-xs font-semibold">Weather temporarily unavailable</span>
       <button
         onClick={handleManualRetry}
-        className="text-xs bg-white border border-red-200 px-3 py-1 rounded-lg hover:bg-red-100 transition font-bold"
+        className="text-xs bg-white text-red-700 border border-red-200 px-4 py-1.5 rounded-lg hover:bg-red-50 transition-colors font-bold shadow-sm active:scale-95"
       >
         Retry
       </button>

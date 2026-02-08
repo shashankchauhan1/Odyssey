@@ -193,7 +193,7 @@ export default function TripPage() {
 
   const [sharingLocation, setSharingLocation] = useState(false);
 
-  // Persistent SOS State
+  // Persistent SOS State (Multi-user)
   const handleShareLocation = async (lat, lng) => {
     setSharingLocation(true);
     try {
@@ -205,15 +205,20 @@ export default function TripPage() {
         timestamp: Date.now()
       };
 
-      // 1. Update Trip State
-      const updatedTrip = { ...trip, safetyBeacon: beaconData };
+      // 1. Update Trip State (Append/Update to Array)
+      const currentBeacons = Array.isArray(trip.safetyBeacons) ? trip.safetyBeacons : [];
+      // Remove existing beacon for this user if any
+      const otherBeacons = currentBeacons.filter(b => b.userId !== beaconData.userId);
+      const updatedBeacons = [...otherBeacons, beaconData];
+
+      const updatedTrip = { ...trip, safetyBeacons: updatedBeacons };
       setTrip(updatedTrip);
 
       // 2. Persist to LocalStorage
       localStorage.setItem(`trip_data_${id}`, JSON.stringify(updatedTrip));
 
       // 3. Persist to DB (Mock)
-      // await fetch(`/api/trips/${id}`, { method: 'PUT', body: JSON.stringify({ safetyBeacon: beaconData }) });
+      // await fetch(`/api/trips/${id}`, { method: 'PUT', body: JSON.stringify({ safetyBeacons: updatedBeacons }) });
 
       console.log("SOS Beacon Activated:", beaconData);
 
@@ -230,14 +235,19 @@ export default function TripPage() {
 
   const handleClearBeacon = async () => {
     try {
-      // 1. Clear Trip State (Owner clears all)
-      const updatedTrip = { ...trip, safetyBeacons: [] };
+      const currentUserId = userRole === 'owner' ? 'owner_id' : 'traveler_id';
+
+      // 1. Clear Trip State (Remove current user's beacon)
+      const currentBeacons = Array.isArray(trip.safetyBeacons) ? trip.safetyBeacons : [];
+      const updatedBeacons = currentBeacons.filter(b => b.userId !== currentUserId);
+
+      const updatedTrip = { ...trip, safetyBeacons: updatedBeacons };
       setTrip(updatedTrip);
 
       // 2. Clear Persistence
       localStorage.setItem(`trip_data_${id}`, JSON.stringify(updatedTrip));
 
-      console.log("SOS Beacons Cleared");
+      console.log("SOS Beacon Cleared for user:", currentUserId);
     } catch (err) {
       console.error("Failed to clear beacon", err);
     }
@@ -427,8 +437,11 @@ export default function TripPage() {
         </div>
       </div>
 
-      {/* EMERGENCY FAB - Connected to page logic */}
-      <EmergencyFAB onShareLocation={handleShareLocation} />
+      {/* EMERGENCY FAB - Now positioned at root level (see bottom) */}
+
+      <div className="fixed bottom-24 right-4 z-40 md:hidden">
+        {/* Mobile visible Safety Widget Trigger */}
+      </div>
 
 
       {showSettingsModal && (
@@ -454,7 +467,7 @@ export default function TripPage() {
               <div
                 className="p-[28px] text-white overflow-hidden relative"
                 style={{
-                  background: 'linear-gradient(135deg, rgb(0 0 0) 0%, rgb(6 16 57) 45%, rgb(5 14 20) 100%)',
+                  background: 'linear-gradient(135deg, rgb(9 4 52) 0%, rgb(29 40 85) 45%, rgb(13 21 65) 100%)',
                   boxShadow: '0 20px 60px rgba(2,6,23,0.6)',
                   borderBottomLeftRadius: '24px',
                   borderBottomRightRadius: '24px',
@@ -891,29 +904,34 @@ export default function TripPage() {
                 {/* Status / Alerts - Compact */}
                 <div className="pt-2 border-t border-white/10">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/80">Active Alert</p>
-                    {trip.safetyBeacon && userRole === 'owner' && (
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/80">Active Alerts</p>
+                    {(trip.safetyBeacons?.length > 0) && (
                       <button onClick={handleClearBeacon} className="text-[10px] text-white hover:text-red-100 font-bold underline">
-                        Clear
+                        Clear Mine
                       </button>
                     )}
                   </div>
 
-                  {trip.safetyBeacon ? (
-                    <div className="bg-white/10 border border-white/20 p-2.5 rounded-xl flex items-center gap-3 backdrop-blur-sm shadow-sm">
-                      <div className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center shrink-0 shadow-lg animate-pulse">
-                        <span className="text-xs">🆘</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white font-bold text-xs max-w-[120px]">{trip.safetyBeacon.userName} !</p>
-                        <a
-                          href={`https://www.google.com/maps?q=${trip.safetyBeacon.latitude},${trip.safetyBeacon.longitude}`}
-                          target="_blank" rel="noopener noreferrer"
-                          className="text-[10px] text-white/90 hover:text-white underline decoration-white/50 underline-offset-2 block truncate"
-                        >
-                          View Location &rarr;
-                        </a>
-                      </div>
+                  {(trip.safetyBeacons && trip.safetyBeacons.length > 0) ? (
+                    <div className="space-y-2 max-h-[100px] overflow-y-auto pr-1 custom-scrollbar">
+                      {trip.safetyBeacons.map((beacon, idx) => (
+                        <div key={idx} className="bg-white/10 border border-white/20 p-2.5 rounded-xl flex items-center gap-3 backdrop-blur-sm shadow-sm">
+                          <div className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center shrink-0 shadow-lg animate-pulse">
+                            <span className="text-xs">🆘</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white font-bold text-xs max-w-[120px] truncate">{beacon.userName} !</p>
+                            <a
+                              href={`https://www.google.com/maps?q=${beacon.latitude},${beacon.longitude}`}
+                              target="_blank" rel="noopener noreferrer"
+                              className="text-[10px] text-white/90 hover:text-white underline decoration-white/50 underline-offset-2 block truncate"
+                            >
+                              View Location &rarr;
+                            </a>
+                            <p className="text-[9px] text-white/60 mt-0.5">{new Date(beacon.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <p className="text-[10px] text-white/80 flex items-center gap-1.5 italic">
@@ -938,6 +956,7 @@ export default function TripPage() {
       />
       <EmergencyFAB
         number={destination?.emergency?.number || "112"}
+        emergencyNumbers={destination?.emergency}
         isOpenProp={showTriggerSOS}
         onClose={() => setShowTriggerSOS(false)}
         onShareLocation={handleShareLocation}

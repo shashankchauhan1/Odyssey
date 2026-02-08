@@ -2,7 +2,7 @@
 import { Phone, AlertTriangle, Cross } from 'lucide-react';
 import { useState } from 'react';
 
-export default function EmergencyFAB({ number = "112", isOpenProp, onClose, onShareLocation }) {
+export default function EmergencyFAB({ number = "112", isOpenProp, onClose, onShareLocation, emergencyNumbers }) {
     const [isOpen, setIsOpen] = useState(false);
     const [sharing, setSharing] = useState(false);
     const [shareStatus, setShareStatus] = useState(null); // 'success' | 'error' | null
@@ -39,61 +39,94 @@ export default function EmergencyFAB({ number = "112", isOpenProp, onClose, onSh
     };
 
     const contacts = [
-        { name: "Police", number: "100", icon: "👮" },
-        { name: "Ambulance", number: "108", icon: "🚑" },
-        { name: "Fire", number: "101", icon: "🚒" },
+        { name: "Police", number: emergencyNumbers?.police || "100", icon: "👮" },
+        { name: "Ambulance", number: emergencyNumbers?.ambulance || "102", icon: "🚑" },
+        { name: "Fire", number: emergencyNumbers?.fire || "101", icon: "🚒" },
     ];
 
     return (
-        <>
-            {/* FAB Button - SAFE POSITION (Above Footer) */}
+        <div
+            className="fixed bottom-4 right-4 z-[9999]"
+            onMouseEnter={() => {
+                // Check if device supports hover (desktop/laptop)
+                if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
+                    setShow(true);
+                }
+            }}
+            onMouseLeave={() => {
+                if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
+                    setShow(false);
+                }
+            }}
+        >
+            {/* FAB Button */}
             <button
-                onClick={() => setShow(!show)}
-                className="fixed bottom-4 right-4 z-50 w-14 h-14 bg-red-600 text-white rounded-full shadow-xl shadow-red-200 hover:shadow-2xl hover:bg-red-700 transition-all duration-300 flex items-center justify-center active:scale-95 border-4 border-white/20"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    setShow(!show);
+                }}
+                className="w-14 h-14 bg-red-600 text-white rounded-full shadow-2xl shadow-red-500/30 hover:shadow-red-600/50 hover:bg-red-700 transition-all duration-300 flex items-center justify-center active:scale-95 border-4 border-white/20 tap-highlight-transparent relative z-50 cursor-pointer"
                 aria-label="Emergency Menu"
             >
                 {show ? <Cross className="w-6 h-6 rotate-45" /> : <Phone className="w-6 h-6 animate-pulse" />}
             </button>
 
-            {/* Menu */}
-            {show && (
-                <div className="fixed bottom-20 right-4 z-50 flex flex-col gap-3 animate-in slide-in-from-bottom-4 duration-200 items-end">
+            {/* Floating Panel (Desktop Hover / Mobile Click) */}
+            <div
+                className={`absolute bottom-16 right-0 z-40 flex flex-col gap-3 items-end transition-all duration-300 origin-bottom-right
+                ${show ? 'opacity-100 scale-100 translate-y-0 visible' : 'opacity-0 scale-90 translate-y-4 invisible pointer-events-none'}`}
+                style={{ paddingBottom: '1rem' }} // Bridge gap for hover
+                onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+            >
 
-                    {/* SOS Beacon Option */}
-                    <button
-                        onClick={handleSOS}
-                        disabled={sharing}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-lg border transition-all w-max
-                            ${shareStatus === 'success' ? 'bg-emerald-500 text-white border-emerald-500' :
-                                'bg-white text-slate-800 border-slate-100 hover:bg-slate-50'}`}
-                    >
-                        <span className="text-sm font-bold">
-                            {sharing ? "Sharing Location..." : shareStatus === 'success' ? "Location Shared!" : "I'm Here / SOS"}
-                        </span>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${shareStatus === 'success' ? 'bg-white/20' : 'bg-red-100 text-red-600'}`}>
-                            {sharing ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div> : <AlertTriangle className="w-4 h-4" />}
-                        </div>
-                    </button>
+                {/* SOS Beacon Option */}
+                <button
+                    onClick={handleSOS}
+                    disabled={sharing}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border w-max transition-all cursor-pointer
+                        ${shareStatus === 'success' ? 'bg-emerald-500 text-white border-emerald-500' :
+                            'bg-white text-slate-900 border-slate-200 hover:bg-slate-50'}`}
+                >
+                    <span className="text-sm font-bold">
+                        {sharing ? "Sharing Location..." : shareStatus === 'success' ? "Location Shared!" : "I'm Here / SOS"}
+                    </span>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${shareStatus === 'success' ? 'bg-white/20' : 'bg-red-100 text-red-600'}`}>
+                        {sharing ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div> : <AlertTriangle className="w-4 h-4" />}
+                    </div>
+                </button>
 
-                    {/* Emergency Contacts */}
+                {/* Emergency Contacts Card */}
+                <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-2 w-[220px] overflow-hidden">
+                    <p className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-100 mb-1">Emergency Call</p>
                     {contacts.map((contact, i) => (
                         <a
                             key={i}
                             href={`tel:${contact.number}`}
-                            className="flex items-center gap-3 px-4 py-3 bg-white text-slate-800 rounded-2xl shadow-lg border border-slate-100 hover:bg-slate-50 transition w-full justify-end group active:scale-95"
+                            className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors group active:bg-slate-100 cursor-pointer"
                         >
-                            <span className="text-sm font-bold group-hover:text-red-600 transition-colors">{contact.name}</span>
-                            <span className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{contact.number}</span>
-                            <span className="text-lg">{contact.icon}</span>
+                            <div className="flex items-center gap-3">
+                                <span className="text-lg bg-slate-100 w-8 h-8 flex items-center justify-center rounded-lg group-hover:bg-red-50 group-hover:text-red-600 transition-colors">{contact.icon}</span>
+                                <div>
+                                    <span className="text-sm font-bold text-slate-700 block leading-tight group-hover:text-red-700 transition-colors">{contact.name}</span>
+                                    <span className="text-[10px] font-mono text-slate-400">{contact.number}</span>
+                                </div>
+                            </div>
+                            <Phone className="w-3.5 h-3.5 text-slate-300 group-hover:text-amber-500 transition-colors" />
                         </a>
                     ))}
                 </div>
-            )}
+            </div>
 
-            {/* Backdrop */}
+            {/* Backdrop (Mobile Only - Click outside behavior) */}
             {show && (
-                <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px]" onClick={() => setShow(false)}></div>
+                <div
+                    className="fixed inset-0 z-30 bg-black/20 backdrop-blur-[1px] lg:hidden"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setShow(false);
+                    }}
+                ></div>
             )}
-        </>
+        </div>
     );
 }

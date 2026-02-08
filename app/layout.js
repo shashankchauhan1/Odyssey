@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: 'Odyssey',
+  title: 'Odyssey-Dev',
   description: 'The Unified Travel Orchestrator',
 };
 
