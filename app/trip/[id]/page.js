@@ -4,20 +4,34 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import {
+  Phone, MapPin, Calendar, Globe, AlertTriangle, ShieldAlert,
+  ChevronRight, Share2, Users, Info, Clock, Utensils,
+  Landmark, BadgeCheck, Lightbulb, Wifi, Wallet, Compass, Plus, Plane, Download, Loader2, ArrowUp
+} from 'lucide-react';
+
 import WeatherWidget from '@/components/WeatherWidget';
 import BookingCard from '@/components/BookingCard';
 import DownloadPdfBtn from '@/components/DownloadPdfBtn';
-import EventsCard from '@/components/EventsCard';
-import ExpenseDashboard from '@/components/ExpenseDashboard';
+import EventsList from '@/components/EventsList';
+import ExpenseSummaryWidget from '@/components/ExpenseSummaryWidget';
 import ShareTripModal from '@/components/ShareTripModal';
 import SafetyWidget from '@/components/SafetyWidget';
 import VideoGallery from '@/components/VideoGallery';
-import LanguageCard from '@/components/LanguageCard';
+import LocalDiscovery from '@/components/LocalDiscovery';
+import TravelAssistance from '@/components/TravelAssistance';
+import EmergencyFAB from '@/components/EmergencyFAB';
+import { Accordion, AccordionItem } from '@/components/ui/Accordion';
+import TransportTabs from '@/components/TransportTabs';
+import QuickActions from '@/components/QuickActions';
+import SmartTipsWidget from '@/components/SmartTipsWidget';
+import TripSettingsModal from '@/components/TripSettingsModal';
+import { Settings } from 'lucide-react';
 
 // Load the map ONLY on the client side
 const TripMap = dynamic(() => import('@/components/TripMap'), {
   ssr: false,
-  loading: () => <div className="h-[400px] w-full bg-gray-100 rounded-xl animate-pulse"></div>
+  loading: () => <div className="h-[400px] w-full bg-slate-100 rounded-3xl animate-pulse"></div>
 });
 
 export default function TripPage() {
@@ -27,68 +41,113 @@ export default function TripPage() {
   const [enriching, setEnriching] = useState(false);
   const [enrichmentAttempted, setEnrichmentAttempted] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+
+  // MOCK ROLE: Change this to 'editor' or 'viewer' to test permissions
+  const [userRole, setUserRole] = useState('owner');
 
   // --- state for ai -> the card for info ---
   const [showGenModal, setShowGenModal] = useState(false);
+  const [showTriggerSOS, setShowTriggerSOS] = useState(false);
   const [genOptions, setGenOptions] = useState({
     days: 3,
     pace: 'Moderate',
     interests: []
   });
 
-  const interestOptions = ["Nature", "Food", "Shopping", "History", "Adventure"];
-
   const fetchTrip = useCallback(async () => {
     if (!id) return;
-
     try {
       const res = await fetch(`/api/trips/${id}`);
+      if (!res.ok) throw new Error("Network response was not ok");
       const json = await res.json();
-      if (json.success) setTrip(json.data);
+      if (json.success) {
+        let tripData = json.data;
+
+        // PERSISTENCE FIX: Recover local safetyBeacon if server misses it (Mock Backend scenario)
+        try {
+          const localData = localStorage.getItem(`trip_data_${id}`);
+          if (localData) {
+            const parsedLocal = JSON.parse(localData);
+            // If we have a local beacon but server has none, keep local
+            if (parsedLocal.safetyBeacon && !tripData.safetyBeacon) {
+              tripData.safetyBeacon = parsedLocal.safetyBeacon;
+            }
+          }
+        } catch (e) {
+          console.error("Error restoring local state", e);
+        }
+
+        setTrip(tripData);
+        setIsOffline(false);
+        // Optional: Auto-cache on successful load? 
+        // localStorage.setItem(`offline_trip_${id}`, JSON.stringify(json.data));
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Fetch failed, trying offline cache:", err);
+      const cached = localStorage.getItem(`offline_trip_${id}`);
+      if (cached) {
+        setTrip(JSON.parse(cached));
+        setIsOffline(true);
+      }
     } finally {
       setLoading(false);
     }
   }, [id]);
 
   useEffect(() => {
-    // 1. Fetch immediately on load
     fetchTrip();
-
-    // 2. Set up the "Heartbeat" (Silent Background Refresh)
-    const intervalId = setInterval(() => {
-      // This calls your existing fetchTrip function
-      // It updates 'trip' state -> which updates ExpenseDashboard automatically
-      fetchTrip(); 
-    }, 3000); // 3000ms = 3 seconds
-
-    // 3. Cleanup: Stop the timer when user leaves the page
+    const intervalId = setInterval(fetchTrip, 3000);
     return () => clearInterval(intervalId);
   }, [fetchTrip]);
- 
-  // Auto-enrich old/sparse destination profiles so logistics cards don't stay blank
+
+  // Handle ESC key for modal
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        setShowGenModal(false);
+        setShowShareModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, []);
+
+  // Scroll to top on mount
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  // Scroll Listener for "Scroll To Top" button
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 300);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Auto-enrichment logic
   useEffect(() => {
     if (!trip || enrichmentAttempted) return;
-
-    // fetch the crucial data (currency, language, airport etc. then)
     const dest = trip?.destination || {};
-    // Check if video_ids is missing or empty
-    const hasVideos = Array.isArray(dest?.video_ids) && dest.video_ids.length > 0;
+    // Check if new fields are missing to trigger re-enrichment if needed
+    // (In a real app, you might want a more robust check)
+    const hasNewFields = dest.cultural_highlights && dest.cultural_highlights.length > 0;
 
-    const needsEnrichment =
-      !dest?.currency ||
-      !dest?.language ||
-      !dest?.connectivity?.sim ||
-      !dest?.accessibility?.nearest_airport ||
-      !(Array.isArray(dest?.local_rules) && dest.local_rules.length > 0) ||
-      !hasVideos;
+    if (hasNewFields) {
+      // If we already have dense data, don't enrich again immediately
+      return;
+    }
+
+    const needsEnrichment = !dest?.currency || !dest?.language || !dest?.cultural_highlights;
 
     if (!needsEnrichment || !dest?._id) return;
 
     setEnrichmentAttempted(true);
     setEnriching(true);
-    // silently calls Ai to get that meathod
     fetch(`/api/destinations/${dest._id}/enrich`, { method: 'POST' })
       .then((r) => r.json())
       .then((json) => {
@@ -101,29 +160,23 @@ export default function TripPage() {
       .finally(() => setEnriching(false));
   }, [trip, enrichmentAttempted, fetchTrip]);
 
-
-  // --- handler for ai generation ---
   const submitGeneration = async (e) => {
-    e.preventDefault(); // stop loading page
-    setLoading(true); // stop loading spinner
-    setShowGenModal(false); // close the popup
-
+    e.preventDefault();
+    setLoading(true);
+    setShowGenModal(false);
     try {
-      // send user preference to backend
       const res = await fetch('/api/trips/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tripId: trip._id,
-          days: genOptions.days,  // relaxed
-          pace: genOptions.pace,    // moderate
-          interests: genOptions.interests // ["adventure"]
+          days: genOptions.days,
+          pace: genOptions.pace,
+          interests: genOptions.interests
         })
       });
       const json = await res.json();
-      if (json.success) {
-        setTrip(json.data);
-      }
+      if (json.success) setTrip(json.data);
     } catch (err) {
       alert("Failed to generate plan");
     } finally {
@@ -131,72 +184,141 @@ export default function TripPage() {
     }
   };
 
-  const toggleInterest = (interest) => {
-    setGenOptions(prev => {
-      // Check: Is this interest already in the list? [adventure,food,etc.] then remove it otherwise add it
-      const newInterests = prev.interests.includes(interest)
-        ? prev.interests.filter(i => i !== interest)
-        : [...prev.interests, interest];
-      return { ...prev, interests: newInterests };
-    });
+  const handleSaveOffline = () => {
+    if (trip) {
+      localStorage.setItem(`offline_trip_${id}`, JSON.stringify(trip));
+      alert("Trip saved for offline use! 📥");
+    }
+  };
+
+  const [sharingLocation, setSharingLocation] = useState(false);
+
+  // Persistent SOS State
+  const handleShareLocation = async (lat, lng) => {
+    setSharingLocation(true);
+    try {
+      const beaconData = {
+        userId: userRole === 'owner' ? 'owner_id' : 'traveler_id', // Mock IDs
+        userName: userRole === 'owner' ? (trip.owner_display_name || 'Owner') : 'Traveler',
+        latitude: lat,
+        longitude: lng,
+        timestamp: Date.now()
+      };
+
+      // 1. Update Trip State
+      const updatedTrip = { ...trip, safetyBeacon: beaconData };
+      setTrip(updatedTrip);
+
+      // 2. Persist to LocalStorage
+      localStorage.setItem(`trip_data_${id}`, JSON.stringify(updatedTrip));
+
+      // 3. Persist to DB (Mock)
+      // await fetch(`/api/trips/${id}`, { method: 'PUT', body: JSON.stringify({ safetyBeacon: beaconData }) });
+
+      console.log("SOS Beacon Activated:", beaconData);
+
+      // Simulate network delay
+      await new Promise(r => setTimeout(r, 800));
+
+    } catch (err) {
+      console.error("Failed to activate beacon", err);
+      alert("Failed to activate Safety Beacon.");
+    } finally {
+      setSharingLocation(false);
+    }
+  };
+
+  const handleClearBeacon = async () => {
+    try {
+      // 1. Clear Trip State (Owner clears all)
+      const updatedTrip = { ...trip, safetyBeacons: [] };
+      setTrip(updatedTrip);
+
+      // 2. Clear Persistence
+      localStorage.setItem(`trip_data_${id}`, JSON.stringify(updatedTrip));
+
+      console.log("SOS Beacons Cleared");
+    } catch (err) {
+      console.error("Failed to clear beacon", err);
+    }
   };
 
   if (loading) {
     return (
-      <div className="p-20 text-center font-bold text-gray-400">
-        {enriching ? 'Enriching destination details…' : 'Loading your Adventure...'}
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="font-bold text-slate-400 animate-pulse">
+            {enriching ? 'Enriching destination details…' : 'Loading your Adventure...'}
+          </p>
+        </div>
       </div>
     );
   }
-  if (!trip) return <div className="p-20 text-center">Trip not found.</div>;
 
-  // the day calculator
-  // it subtracts "Today" from "Start Date" -> if +ve then 5 days to go if -ve 2 days since start
-  const diffDays = Math.ceil((new Date(trip.startDate) - new Date()) / (1000 * 60 * 60 * 24));
-  const daysValue = Math.abs(diffDays);
-  const daysLabel = diffDays >= 0 ? 'Days To Go' : 'Days Since Start';
+  if (!trip) return <div className="p-20 text-center text-slate-500">Trip not found.</div>;
 
   const destination = trip?.destination || {};
   const accessibility = destination?.accessibility && typeof destination.accessibility === 'object' ? destination.accessibility : {};
   const localRulesRaw = Array.isArray(destination?.local_rules) ? destination.local_rules : [];
-  const localRules = localRulesRaw.filter((r) => r && (r.title || r.description));
+  const localRules = localRulesRaw.filter((r) => r && (r.title || r.description)).slice(0, 5);
   const itinerary = Array.isArray(trip?.itinerary) ? trip.itinerary : [];
-
   const connectivity = destination?.connectivity && typeof destination.connectivity === 'object' ? destination.connectivity : {};
   const emergency = destination?.emergency && typeof destination.emergency === 'object' ? destination.emergency : {};
 
-  return (
-    <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8 relative">
+  // New fields
+  // New fields - Filter duplicates
+  const culturalHighlights = [...new Set(destination.cultural_highlights || [])];
+  const famousPlaces = [...new Set(destination.famous_places || [])];
+  const localFood = [...new Set(destination.local_food || [])];
+  const safetyTips = destination.safety_tips || [];
+  const travelTips = destination.travel_tips || [];
 
-      {/* --- AI MODAL --- */}
+  return (
+    <div className="min-h-screen bg-slate-50 relative pb-32 font-sans text-slate-900">
+
+      {/* ... AI Modal (Same as before) ... */}
       {showGenModal && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-lg p-6 sm:p-8 shadow-2xl animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
-            <div className="mb-6 text-center">
-              <span className="text-3xl sm:text-4xl">✨</span>
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mt-2">Design Your Day</h2>
-              <p className="text-gray-500 text-xs sm:text-sm">Tell the AI what kind of trip you want.</p>
-            </div>
+        <div
+          className="fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm transition-opacity"
+          onClick={() => setShowGenModal(false)}
+        >
+          <div
+            className="bg-white rounded-[2rem] w-full max-w-lg p-8 shadow-2xl animate-in fade-in zoom-in duration-200 relative"
+            onClick={e => e.stopPropagation()} // Prevent close when clicking inside
+          >
+            <button
+              onClick={() => setShowGenModal(false)}
+              className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 transition-colors"
+            >
+              <span className="text-xl font-bold leading-none">&times;</span>
+            </button>
+
+            <h2 className="text-2xl font-black text-slate-900 mb-2 text-center">Design Your Day ✨</h2>
+            <p className="text-center text-slate-500 text-sm mb-8">Let AI craft the perfect itinerary for you.</p>
 
             <form onSubmit={submitGeneration} className="space-y-6">
               <div>
-                <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-2">How many days?</label>
-                <input
-                  type="number" min="1" max="10"
-                  value={genOptions.days}
-                  onChange={e => setGenOptions({ ...genOptions, days: e.target.value })}
-                  className="w-full p-3 border border-gray-300 rounded-xl font-bold text-base sm:text-lg text-black"
-                />
+                <label className="block text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-2">Duration (Days)</label>
+                <div className="relative">
+                  <input
+                    type="number" min="1" max="10"
+                    value={genOptions.days}
+                    onChange={e => setGenOptions({ ...genOptions, days: e.target.value })}
+                    className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-xl text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all text-center"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">Days</span>
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-2">Select Pace</label>
+                <label className="block text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-2">Pace</label>
                 <div className="grid grid-cols-3 gap-2">
                   {['Relaxed', 'Moderate', 'Packed'].map(p => (
                     <button
                       key={p} type="button"
                       onClick={() => setGenOptions({ ...genOptions, pace: p })}
-                      className={`py-2 px-4 rounded-lg text-sm font-bold border transition ${genOptions.pace === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                      className={`py-3 rounded-xl text-sm font-bold transition-all border-2 ${genOptions.pace === p ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200 hover:bg-slate-50'}`}
                     >
                       {p}
                     </button>
@@ -204,356 +326,606 @@ export default function TripPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-2">Interests</label>
-                <div className="flex flex-wrap gap-2">
-                  {interestOptions.map(tag => (
-                    <button
-                      key={tag} type="button"
-                      onClick={() => toggleInterest(tag)}
-                      className={`py-1 px-3 rounded-full text-xs font-bold border transition ${genOptions.interests.includes(tag) ? 'bg-slate-800 text-white' : 'bg-white text-gray-500'}`}
-                    >
-                      {genOptions.interests.includes(tag) ? '✓ ' + tag : tag}
-                    </button>
-                  ))}
+              <button type="submit" className="w-full py-4 bg-slate-900 text-white font-bold rounded-2xl hover:bg-slate-800 transition shadow-xl shadow-slate-200 mt-2 flex items-center justify-center gap-2">
+                <span>Generate Plan</span>
+                <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center">
+                  <span className="text-[10px]">✨</span>
                 </div>
-              </div>
-
-              <div className="pt-4 flex gap-3">
-                <button type="button" onClick={() => setShowGenModal(false)} className="flex-1 py-3 text-slate-500 font-bold hover:bg-gray-50 rounded-xl">Cancel</button>
-                <button type="submit" className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200">Generate Plan ➔</button>
-              </div>
+              </button>
             </form>
           </div>
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto">
-
-        {/* Header Section */}
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 sm:gap-0 mb-6 sm:mb-8">
-          <div className="flex-1 min-w-0">
-            <Link href="/" className="text-xs sm:text-sm text-slate-500 hover:text-indigo-600 mb-2 block">← Back to Home</Link>
-
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 mb-2 break-words">
-              Trip to {trip.destination.name}
-            </h1>
-
-            <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-slate-500 mb-4">
-              <span>Starts {new Date(trip.startDate).toDateString()}</span>
-              <span className="hidden sm:inline">•</span>
-              <span>{trip.travelers} Travelers</span>
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={() => setShowShareModal(true)}
-                className="rounded-xl bg-white px-4 py-2 text-xs sm:text-sm font-bold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 transition"
-              >
-                Share
-              </button>
-              <DownloadPdfBtn trip={trip} />
-            </div>
-
-          </div>
-
-          <div className="text-center bg-indigo-50 p-3 sm:p-4 rounded-2xl border border-indigo-100 shrink-0 self-start sm:self-auto">
-            <span className="block text-2xl sm:text-3xl font-extrabold text-indigo-700">{daysValue}</span>
-            <span className="text-[10px] sm:text-[11px] font-extrabold text-indigo-600 uppercase tracking-wide">{daysLabel}</span>
-          </div>
-        </div>
-
-        {/* weather */}
-        <WeatherWidget city={trip.destination.name} />
-
-        {/* live events card */}
-        {/* COLLABORATORS */}
-        <div className="mt-6 mb-6 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div>
-              <h3 className="text-sm sm:text-base font-extrabold text-slate-900">Collaborators</h3>
-              <p className="text-xs text-slate-500">Owner + invited editors</p>
-            </div>
-            <button
-              onClick={() => setShowShareModal(true)}
-              className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800 transition"
-            >
-              Share
-            </button>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs sm:text-sm">
-              <span className="font-semibold text-slate-800">Owner</span>
-              <span className="text-slate-600 break-all">
-                {trip.owner_display_name || trip.owner_email || trip.userId}
-              </span>
-            </div>
-            {(trip.collaborators || []).length === 0 && (
-              <p className="text-xs text-slate-500">No collaborators yet.</p>
-            )}
-            {(trip.collaborators || []).map((c, idx) => (
-              <div
-                key={`${c.email || c.userId || idx}`}
-                className="flex items-center justify-between rounded-xl border border-slate-100 bg-white px-3 py-2 text-xs sm:text-sm"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-900 truncate">
-                    {c.display_name || c.email || c.userId || 'Collaborator'}
-                  </p>
-                  <p className="text-[11px] text-slate-500 truncate">
-                    {c.email || c.userId ? (c.email || `User ID: ${c.userId}`) : 'Pending signup'}
-                  </p>
-                </div>
-                <span className="text-[11px] font-bold text-indigo-600 uppercase">{c.role || 'editor'}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* NEW: LIVE EVENTS CARD */}
-        <EventsCard destinationName={trip.destination.name} />
-
-        {/* quick essentials  */}
-        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 mb-6 sm:mb-8">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="text-xs font-extrabold uppercase tracking-wide text-slate-500 mb-2">💱 Money</div>
-            <div className="text-sm font-semibold text-slate-900">
-              {destination.currency || 'Local currency varies — carry some cash, plus a card/UPI backup where supported.'}
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="text-xs font-extrabold uppercase tracking-wide text-slate-500 mb-2">💬 Language</div>
-            <div className="text-sm font-semibold text-slate-900">
-              {destination.language || 'Local language varies — English is commonly understood in tourist areas.'}
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="text-xs font-extrabold uppercase tracking-wide text-slate-500 mb-2">📶 Connectivity</div>
-            <div className="text-sm text-slate-700">
-              <div>
-                <span className="font-bold text-slate-900">SIM:</span>{' '}
-                {connectivity.sim || 'Get a local SIM/eSIM when possible and download offline maps before you arrive.'}
-              </div>
-              <div className="mt-1">
-                <span className="font-bold text-slate-900">Wi‑Fi:</span>{' '}
-                {connectivity.wifi || 'Wi‑Fi is common in hotels/cafes; confirm reliability if you need to work.'}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <LanguageCard phrases={destination.essential_phrases || []} />
-
-        {emergency.note && (
-          <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-            <div className="text-xs font-extrabold uppercase tracking-wide text-amber-700">☎️ Emergency note</div>
-            <p className="mt-2 text-sm text-amber-900">{emergency.note}</p>
+      {/* Header */}
+      <div className="bg-white/80 backdrop-blur-md border-b border-slate-200 relative z-30 shadow-sm">
+        {isOffline && (
+          <div className="bg-slate-900 text-white text-xs font-bold text-center py-1 flex items-center justify-center gap-2">
+            <Wifi className="w-3 h-3 text-rose-400" /> You are viewing an offline version of this trip.
           </div>
         )}
-
-        {/* logistics, etc */}
-        {trip.destination && (
-          <div className="space-y-6 mb-8">
-
-            {/* vibe and history card */}
-            <div className="bg-white p-4 sm:p-6 lg:p-8 rounded-xl border border-gray-200 shadow-sm">
-              <div className="mb-4 sm:mb-6">
-                <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">About {trip.destination.name}</h2>
-                {trip.destination.vibe ? (
-                  <p className="text-slate-600 leading-relaxed italic">“{trip.destination.vibe}”</p>
-                ) : (
-                  <p className="text-slate-600 leading-relaxed">A quick intro will appear here as the destination profile fills in.</p>
-                )}
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-6 sm:gap-8">
-                <div>
-                  <h3 className="font-bold text-slate-900 mb-2 flex items-center gap-2">🏰 History & Culture</h3>
-                  <p className="text-sm text-slate-600 leading-relaxed">{trip.destination.history || trip.destination.description}</p>
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 mb-2 flex items-center gap-2">🗓️ Best Time to Visit</h3>
-                  <p className="text-sm text-slate-600">{trip.destination.best_time || "All year round"}</p>
-                </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <Link href="/" className="text-xs font-bold text-indigo-600 hover:text-indigo-700 mb-1 inline-flex items-center gap-1 group">
+                <ChevronRight className="w-3 h-3 rotate-180 group-hover:-translate-x-0.5 transition-transform" /> Back to Home
+              </Link>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">
+                Trip to {trip.destination.name}
+              </h1>
+              <div className="flex items-center gap-3 text-sm text-slate-500 font-medium mt-1">
+                <span>{new Date(trip.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                <span>{trip.travelers} Travelers</span>
               </div>
             </div>
 
-            {/* youtube video links */}
-            <div className="mt-6">
-               <VideoGallery videoIds={trip.destination.video_ids} />
-            </div>
+            <div className="w-full sm:w-auto mt-6 sm:mt-0">
+              {/* Mobile Actions: Scrollable Pill Style */}
+              <div
+                className="flex items-center gap-2.5 overflow-x-auto pb-2 mb-4 sm:mb-0 sm:overflow-visible sm:pb-0 hide-scrollbar"
+                style={{ scrollSnapType: 'x mandatory' }}
+              >
+                {/* PLAN */}
+                <button
+                  onClick={() => setShowGenModal(true)}
+                  className="bg-white hover:bg-slate-50 text-slate-700 rounded-full px-4 py-2.5 shadow-[0_6px_16px_rgba(0,0,0,0.08)] flex items-center gap-2 font-bold text-xs whitespace-nowrap shrink-0 scroll-snap-align-start"
+                >
+                  <Calendar className="w-4 h-4 text-indigo-600" />
+                  <span>Plan Trip</span>
+                </button>
 
-            {/* logistic card */}
-            <div className="grid sm:grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-              <div className="bg-white p-4 sm:p-6 rounded-xl border border-gray-200 shadow-sm">
-                <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-4">✈️ How to Reach</h3>
-                <div className="space-y-4">
-                  {/* airport */}
-                  {accessibility?.nearest_airport && (
-                    <div className="flex items-start gap-3">
-                      <span className="text-xl">🛫</span>
-                      <div>
-                        <p className="font-bold text-slate-800">Nearest Airport</p>
-                        <p className="text-sm text-gray-600">
-                          {accessibility.nearest_airport.name}
-                          {accessibility.nearest_airport.distance_km != null && (
-                            <span className="text-xs ml-1 bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                              {accessibility.nearest_airport.distance_km}km away
+                {/* EXPENSE */}
+                <Link
+                  href={`/trip/${id}/expenses`}
+                  className="bg-white hover:bg-slate-50 text-slate-700 rounded-full px-4 py-2.5 shadow-[0_6px_16px_rgba(0,0,0,0.08)] flex items-center gap-2 font-bold text-xs whitespace-nowrap shrink-0 scroll-snap-align-start"
+                >
+                  <Wallet className="w-4 h-4 text-emerald-500" />
+                  <span>Expenses</span>
+                </Link>
+
+                {/* INVITE */}
+                <button
+                  onClick={() => setShowShareModal(true)}
+                  className="bg-white hover:bg-slate-50 text-slate-700 rounded-full px-4 py-2.5 shadow-[0_6px_16px_rgba(0,0,0,0.08)] flex items-center gap-2 font-bold text-xs whitespace-nowrap shrink-0 scroll-snap-align-start"
+                >
+                  <Users className="w-4 h-4 text-blue-500" />
+                  <span>Invite</span>
+                </button>
+
+                {/* SHARE */}
+                <button
+                  onClick={() => {
+                    if (navigator.share) {
+                      navigator.share({
+                        title: `Trip to ${trip.destination.name}`,
+                        text: `Join my trip to ${trip.destination.name} on Odyssey!`,
+                        url: window.location.href
+                      }).catch(console.error);
+                    } else {
+                      setShowShareModal(true);
+                    }
+                  }}
+                  className="bg-white hover:bg-slate-50 text-slate-700 rounded-full px-4 py-2.5 shadow-[0_6px_16px_rgba(0,0,0,0.08)] flex items-center gap-2 font-bold text-xs whitespace-nowrap shrink-0 scroll-snap-align-start"
+                >
+                  <Share2 className="w-4 h-4 text-indigo-500" />
+                  <span>Share</span>
+                </button>
+              </div>
+
+              {/* SAVE & PDF - Row below */}
+              <div className="flex gap-3">
+                <button onClick={handleSaveOffline} className="flex-1 bg-slate-100 rounded-[16px] p-[14px] flex items-center justify-center gap-2 hover:bg-slate-200 transition text-slate-600 font-bold text-xs">
+                  <Download className="w-4 h-4" /> Save Offline
+                </button>
+                <div className="flex-1">
+                  <DownloadPdfBtn trip={trip} variant="full" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* EMERGENCY FAB - Connected to page logic */}
+      <EmergencyFAB onShareLocation={handleShareLocation} />
+
+
+      {showSettingsModal && (
+        <TripSettingsModal
+          trip={trip}
+          onClose={() => setShowSettingsModal(false)}
+          onUpdate={(updatedTrip) => setTrip(prev => ({ ...prev, ...updatedTrip }))}
+        />
+      )}
+
+
+
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8">
+
+        {/* 70/30 GRID LAYOUT */}
+        <div className="grid grid-cols-1 lg:grid-cols-[70%_30%] gap-8 items-start">
+
+          {/* --- LEFT COLUMN (70%) --- */}
+          <div className="space-y-8 min-w-0">
+
+            {/* 1. HERO / DESTINATION SUMMARY (REFINED) */}
+            <section className="relative mb-12">
+              <div
+                className="p-[28px] text-white overflow-hidden relative"
+                style={{
+                  background: 'linear-gradient(135deg, rgb(0 0 0) 0%, rgb(6 16 57) 45%, rgb(5 14 20) 100%)',
+                  boxShadow: '0 20px 60px rgba(2,6,23,0.6)',
+                  borderBottomLeftRadius: '24px',
+                  borderBottomRightRadius: '24px',
+                  borderTopLeftRadius: '2rem',
+                  borderTopRightRadius: '2rem'
+                }}
+              >
+
+                {/* Background decorative elements (Subtle) */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2 pointer-events-none"></div>
+
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 md:gap-8">
+
+                  {/* Left: Destination Info & Status */}
+                  <div className="flex-1 space-y-4">
+                    <div>
+                      {/* Status Badge */}
+                      {(() => {
+                        const now = new Date();
+                        const start = new Date(trip.startDate);
+                        const end = new Date(trip.endDate);
+                        let statusText = "";
+                        let statusColor = "bg-slate-700/50 text-slate-200 border-slate-600/30"; // default
+
+                        if (now < start) {
+                          const diffTime = Math.abs(start - now);
+                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                          statusText = `Trip starts in ${diffDays} day${diffDays !== 1 ? 's' : ''}`;
+                          statusColor = "bg-white/20 text-white border-white/30";
+                        } else if (now >= start && now <= end) {
+                          statusText = "Currently Traveling ✈️";
+                          statusColor = "bg-amber-400/30 text-amber-50 border-amber-400/40 animate-pulse";
+                        } else {
+                          statusText = "🚗 🚌✈️🚅";
+                          statusColor = "bg-slate-900/30 text-slate-200 border-slate-500/30";
+                        }
+
+                        return (
+                          <div className="inline-flex items-center gap-2 mb-3">
+                            <span className={`backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border ${statusColor} shadow-sm`}>
+                              {statusText}
                             </span>
-                          )}
-                        </p>
+                            <span className="text-slate-400 text-xs font-medium flex items-center gap-1">
+                              <MapPin className="w-3 h-3" /> {trip.destination.country || "Destination"}
+                            </span>
+                          </div>
+                        );
+                      })()}
+
+                      <h2
+                        className="font-bold tracking-tight text-white leading-tight"
+                        style={{ fontSize: 'clamp(22px, 6vw, 32px)' }}
+                      >
+                        {trip.destination.name}
+                      </h2>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3 text-xs sm:text-sm font-medium text-slate-300">
+                      <div className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg backdrop-blur-sm border border-white/5">
+                        <Calendar className="w-3.5 h-3.5 text-indigo-300" />
+                        <span>Best Time: <span className="text-white font-semibold">{destination.best_time || "Check forecast"}</span></span>
+                      </div>
+                      <div className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-lg backdrop-blur-sm border border-white/5">
+                        <Compass className="w-3.5 h-3.5 text-pink-300" />
+                        <span>Known For: <span className="text-white font-semibold">{culturalHighlights.slice(0, 2).join(", ") || "Culture & Views"}</span></span>
                       </div>
                     </div>
-                  )}
+                  </div>
 
-                  {/* Train */}
-                  {accessibility?.nearest_railway && (
-                    <div className="flex items-start gap-3">
-                      <span className="text-xl">🚆</span>
-                      <div>
-                        <p className="font-bold text-slate-800">Nearest Train</p>
-                        <p className="text-sm text-gray-600">
-                          {accessibility.nearest_railway.name}
-                          {accessibility.nearest_railway.distance_km != null && (
-                            <span className="text-xs text-slate-500"> ({accessibility.nearest_railway.distance_km}km)</span>
-                          )}
-                        </p>
-                      </div>
+                  {/* Right: Weather Widget (Compact & Aligned) */}
+                  <div className="w-full md:w-auto min-w-[240px]">
+                    <div style={{ background: '#ffffff00', backdropFilter: 'blur(10px)', borderRadius: '16px' }} className="p-1 shadow-lg">
+                      <WeatherWidget city={trip.destination.name} theme="dark" compact={true} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+
+            </section>
+
+
+
+            {/* 2. ABOUT DESTINATION (RICH CONTENT - REFINED) */}
+            <section className="bg-white rounded-[2rem] p-6 sm:p-8 shadow-lg shadow-slate-900/5 border border-slate-100">
+              <div className="mb-8">
+                <h2 className="text-xl font-bold text-slate-900 mb-3 tracking-tight flex items-center gap-2">
+                  <span className="text-2xl">🌍</span> About {trip.destination.name}
+                </h2>
+                <p className="text-slate-600 text-base leading-relaxed">{trip.destination.description || "Discover the magic of this place."}</p>
+              </div>
+
+              {/* Highlights Grid */}
+              <div className="grid md:grid-cols-2 gap-8">
+
+                {/* Culture & Highlights */}
+                <div>
+                  <h3 className="flex items-center gap-2 font-bold text-slate-800 mb-3 text-base">
+                    <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600"><Landmark className="w-4 h-4" /></div>
+                    Highlights
+                  </h3>
+                  <ul className="space-y-2">
+                    {culturalHighlights.length > 0 ? culturalHighlights.map((item, i) => (
+                      <li key={i} className="flex items-start gap-2.5 text-sm text-slate-600 group">
+                        <BadgeCheck className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
+                        <span className="leading-relaxed">{item}</span>
+                      </li>
+                    )) : (
+                      <li className="text-sm text-slate-400 italic">Highlights details loading...</li>
+                    )}
+                    {famousPlaces.slice(0, 3).map((place, i) => (
+                      <li key={`fp-${i}`} className="flex items-start gap-2.5 text-sm text-slate-600 group">
+                        <MapPin className="w-4 h-4 text-rose-400 mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
+                        <span className="leading-relaxed">{place}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Best Time & Food */}
+                <div>
+                  <h3 className="flex items-center gap-2 font-bold text-slate-800 mb-3 text-base">
+                    <div className="p-1.5 bg-amber-50 rounded-lg text-amber-600"><Clock className="w-4 h-4" /></div>
+                    Best Time to Visit
+                  </h3>
+                  <p className="text-sm text-slate-600 mb-6 leading-relaxed bg-amber-50/30 p-3 rounded-xl border border-amber-100/50">
+                    {destination.best_time_description || destination.best_time || "Check weather forecast."}
+                  </p>
+
+                  <h3 className="flex items-center gap-2 font-bold text-slate-800 mb-3 text-base">
+                    <div className="p-1.5 bg-orange-50 rounded-lg text-orange-600"><Utensils className="w-4 h-4" /></div>
+                    Must Try Food
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {localFood.length > 0 ? localFood.map((food, i) => (
+                      <span key={i} className="px-3 py-1.5 bg-white text-slate-600 text-[11px] font-semibold rounded-full border border-slate-200 shadow-sm hover:shadow-md hover:border-orange-200 hover:text-orange-600 transition-all cursor-default">
+                        {food}
+                      </span>
+                    )) : (
+                      <span className="text-sm text-slate-400 italic">Local delicacies loading...</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Travel & Safety Tips */}
+              {(safetyTips.length > 0 || travelTips.length > 0) && (
+                <div className="mt-8 pt-8 border-t border-slate-100 grid md:grid-cols-2 gap-8">
+                  <div>
+                    <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2 text-sm">
+                      <ShieldAlert className="w-3.5 h-3.5 text-slate-400" /> Safety
+                    </h4>
+                    <ul className="space-y-2">
+                      {safetyTips.map((tip, i) => (
+                        <li key={i} className="text-xs text-slate-500 flex items-start gap-2">
+                          <div className="w-1 h-1 rounded-full bg-slate-300 mt-1.5 shrink-0"></div>
+                          <span className="leading-relaxed">{tip}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2 text-sm">
+                      <Lightbulb className="w-3.5 h-3.5 text-slate-400" /> Tips
+                    </h4>
+                    <ul className="space-y-2">
+                      {travelTips.map((tip, i) => (
+                        <li key={i} className="text-xs text-slate-500 flex items-start gap-2">
+                          <div className="w-1 h-1 rounded-full bg-slate-300 mt-1.5 shrink-0"></div>
+                          <span className="leading-relaxed">{tip}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* 3. How to Reach */}
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-4 px-1 flex items-center gap-2">
+                <div className="p-1.5 bg-blue-100 rounded-lg text-blue-600"><Plane className="w-5 h-5" /></div>
+                How to Reach
+              </h2>
+              <TransportTabs
+                transportInfo={destination.transport_info}
+                destinationName={trip.destination.name}
+                nearestStation={accessibility?.nearest_railway?.name}
+                units={trip.preferences?.units}
+              />
+            </section>
+
+            {/* 4. Map Section */}
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-4 px-1 flex items-center gap-2">
+                <div className="p-1.5 bg-emerald-100 rounded-lg text-emerald-600"><MapPin className="w-5 h-5" /></div>
+                Map View
+              </h2>
+              <div className="bg-white rounded-[2rem] overflow-hidden shadow-lg shadow-slate-900/5 border border-slate-100 h-[400px] relative z-0">
+                <TripMap destinationName={trip.destination.name} />
+              </div>
+            </section>
+
+            {/* 5. Itinerary & Events (Accordion) */}
+            <section className="space-y-6">
+              <h2 className="text-xl font-bold text-slate-900 px-1 flex items-center gap-2">
+                <div className="p-1.5 bg-purple-100 rounded-lg text-purple-600"><Calendar className="w-5 h-5" /></div>
+                Trip Schedule
+              </h2>
+              <Accordion defaultOpen="itinerary">
+                <AccordionItem value="itinerary" title="Daily Itinerary" icon="📅">
+                  {itinerary.length > 0 ? (
+                    <div className="space-y-6 relative before:absolute before:left-3 before:top-4 before:bottom-4 before:w-px before:bg-indigo-100 before:hidden sm:before:block pl-1">
+                      {itinerary.map((dayItem) => (
+                        <div key={dayItem.day} className="relative sm:pl-10">
+                          <div className="hidden sm:flex absolute left-0 top-0 w-6 h-6 rounded-full bg-indigo-600 text-white items-center justify-center font-bold text-xs ring-4 ring-white shadow-sm z-10 transition-transform hover:scale-110">
+                            {dayItem.day}
+                          </div>
+                          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 hover:border-indigo-200 hover:shadow-sm transition-all">
+                            <div className="flex justify-between items-center mb-3">
+                              <h3 className="font-bold text-slate-900 text-base">Day {dayItem.day}</h3>
+                              {dayItem.theme && <span className="text-[10px] font-bold text-indigo-600 bg-white border border-indigo-100 px-2 py-0.5 rounded-full shadow-sm">{dayItem.theme}</span>}
+                            </div>
+                            <div className="space-y-3">
+                              {dayItem.events?.map((event, idx) => (
+                                <div key={idx} className="bg-white p-3.5 rounded-xl border border-slate-100 shadow-sm flex flex-col sm:flex-row gap-3 items-start hover:shadow-md transition-shadow">
+                                  <div className="shrink-0 pt-0.5">
+                                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded block text-center min-w-[60px]">{event.startTime}</span>
+                                  </div>
+                                  <div>
+                                    <h4 className="font-bold text-slate-900 text-sm">{event.title}</h4>
+                                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">{event.description}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <Calendar className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                      <p className="text-slate-500 mb-4 font-medium text-sm">No Itinerary Created Yet</p>
+                      <button onClick={() => setShowGenModal(true)} className="px-6 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-xs shadow-lg shadow-slate-200 hover:bg-slate-800 transition-colors">
+                        ✨ Generate Itinerary
+                      </button>
                     </div>
                   )}
+                </AccordionItem>
 
-                  {!accessibility?.nearest_airport && !accessibility?.nearest_railway && (
-                    <p className="text-sm text-slate-500">
-                      Transport details aren’t available yet — Odyssey will auto-enrich this destination when possible.
+                <AccordionItem value="events" title="Upcoming Events" icon="🎉">
+                  <EventsList destinationName={trip.destination.name} />
+                </AccordionItem>
+              </Accordion>
+            </section>
+
+            {/* 6. Local Discovery */}
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 mb-4 px-1 flex items-center gap-2">
+                <div className="p-1.5 bg-pink-100 rounded-lg text-pink-600"><Compass className="w-5 h-5" /></div>
+                Local Discovery
+              </h2>
+              <LocalDiscovery destinationName={trip.destination.name} />
+            </section>
+          </div>
+
+          {/* --- RIGHT COLUMN (30%) --- */}
+          <aside className="space-y-6 w-full shrink-0">
+
+            {/* 1. Collaborators */}
+            <div className="bg-white rounded-[2rem] p-5 shadow-lg shadow-slate-900/5 border border-slate-100">
+              <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2 text-base">
+                <Users className="w-4 h-4 text-indigo-500" /> Trip Team
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-100 hover:bg-white hover:shadow-sm transition-all">
+                  <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-slate-200">
+                    {(trip.owner_display_name || 'O').charAt(0)}
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">Owner</p>
+                    <p className="text-[10px] text-slate-500">{trip.owner_email}</p>
+                  </div>
+                </div>
+                {trip.collaborators?.map((c, i) => (
+                  <div key={i} className="flex items-center gap-3 p-1.5">
+                    <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-[10px] ring-2 ring-white shadow-sm">
+                      {(c.email || 'C').charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-900 truncate">{c.email}</p>
+                      <p className="text-[9px] text-indigo-500 font-bold uppercase tracking-wider">Traveler</p>
+                    </div>
+                  </div>
+                ))}
+                <button onClick={() => setShowShareModal(true)} className="w-full py-3 mt-2 border border-dashed border-slate-300 rounded-xl text-xs font-bold text-slate-500 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2">
+                  <Plus className="w-3.5 h-3.5" /> Invite Friends
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Insights */}
+            <div className="bg-white rounded-[2rem] p-5 shadow-lg shadow-slate-900/5 border border-slate-100">
+              <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2 text-base">
+                <Info className="w-4 h-4 text-orange-500" /> Insights
+              </h3>
+              <div className="space-y-4">
+                {localRules.length > 0 ? localRules.map((rule, i) => (
+                  <div key={i} className="relative pl-3 pb-1 border-l-2 border-slate-100 last:border-0">
+                    <div className="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-orange-100 border-2 border-white ring-1 ring-orange-200"></div>
+                    <h4 className="font-bold text-slate-800 text-xs mb-0.5">{rule.title}</h4>
+                    <p className="text-[11px] text-slate-500 leading-relaxed font-medium">{rule.description}</p>
+                  </div>
+                )) : <p className="text-xs text-slate-400 italic">No specific insights available.</p>}
+              </div>
+            </div>
+
+            {/* 3. Travel Info (REFINED) */}
+            <div className="bg-white rounded-[2rem] p-5 shadow-lg shadow-slate-900/5 border border-slate-100">
+              <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2 text-base">
+                <Globe className="w-4 h-4 text-blue-600" /> Travel Info
+              </h3>
+              <div className="space-y-3">
+                {/* Currency */}
+                <div className="flex items-center gap-3 group">
+                  <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100 group-hover:bg-blue-50 group-hover:border-blue-100 transition-colors">
+                    <span className="text-base">💱</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block mb-0.5">Currency</span>
+                    <p className="font-bold text-slate-900 text-xs">{destination.currency || 'N/A'}</p>
+                  </div>
+                </div>
+
+                {/* Language */}
+                <div className="flex items-center gap-3 group">
+                  <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100 group-hover:bg-indigo-50 group-hover:border-indigo-100 transition-colors">
+                    <span className="text-base">🗣️</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block mb-0.5">Language</span>
+                    <p className="font-bold text-slate-900 text-xs">{destination.language || 'N/A'}</p>
+                  </div>
+                </div>
+
+                {/* Connectivity */}
+                <div className="flex items-center gap-3 group">
+                  <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100 group-hover:bg-cyan-50 group-hover:border-cyan-100 transition-colors">
+                    <Wifi className="w-4 h-4 text-cyan-500" />
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block mb-0.5">Connectivity</span>
+                    <p className="font-bold text-slate-900 text-xs">{connectivity.sim || 'N/A'}</p>
+                  </div>
+                </div>
+
+                {/* Timezone */}
+                <div className="flex items-center gap-3 group">
+                  <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100 group-hover:bg-violet-50 group-hover:border-violet-100 transition-colors">
+                    <Clock className="w-4 h-4 text-violet-500" />
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest block mb-0.5">Timezone</span>
+                    <p className="font-bold text-slate-900 text-xs">{destination.timezone || 'Local Time'}</p>
+                  </div>
+                </div>
+
+                {/* Emergency */}
+                <div className="flex items-center gap-3 group pt-1">
+                  <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center border border-red-100 group-hover:scale-105 transition-transform">
+                    <ShieldAlert className="w-5 h-5 text-red-500" />
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-extrabold text-red-400 uppercase tracking-widest block mb-0.5">Emergency</span>
+                    <p className="font-black text-red-900 text-sm">{emergency.number || '112'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SAFETY BEACON (Moved & Compact) */}
+            <div
+              className="p-4 relative overflow-hidden text-black shadow-lg shadow-orange-500/10 w-full lg:max-w-[330px] lg:mx-auto"
+              style={{
+                background: 'linear-gradient(135deg, rgb(255 124 0), #ff7d7d)',
+                border: '1px solid #fed7aa',
+                borderRadius: '24px'
+              }}
+            >
+              {/* Decorative Background */}
+              <div className="absolute top-0 right-0 w-24 h-24 bg-white/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+
+              <div className="flex flex-col gap-3 relative z-10">
+                <div className="flex justify-between items-start">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-lg">📡</span>
+                      <h3 className="text-sm font-black tracking-tight text-slate-800">Safety Beacon</h3>
+                    </div>
+                    <p className="text-white text-[10px] font-medium leading-tight opacity-90">
+                      Share location instantly.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  disabled={sharingLocation}
+                  onClick={() => {
+                    if (!navigator.geolocation) { alert("Geolocation not supported"); return; }
+                    setSharingLocation(true);
+                    navigator.geolocation.getCurrentPosition(
+                      (pos) => handleShareLocation(pos.coords.latitude, pos.coords.longitude),
+                      (err) => {
+                        alert("Location permission required");
+                        setSharingLocation(false);
+                      }
+                    );
+                  }}
+                  style={{
+                    background: sharingLocation ? '#9a3412' : 'linear-gradient(135deg, #ea580c, #dc2626)',
+                    boxShadow: sharingLocation ? 'none' : '0 4px 12px rgba(220,38,38,0.3)',
+                    height: '40px',
+                    borderRadius: '12px'
+                  }}
+                  className={`w-full font-bold flex items-center justify-center gap-2 transition-transform hover:-translate-y-px active:scale-95 whitespace-nowrap text-white text-xs
+                              ${sharingLocation ? 'cursor-not-allowed opacity-80' : ''}`}
+                >
+                  {sharingLocation ? <Loader2 className="w-3 h-3 animate-spin text-orange-200" /> : <MapPin className="w-3 h-3 text-[#ffcc00]" />}
+                  {sharingLocation ? "Sharing..." : "SOS Alert"}
+                </button>
+
+                {/* Status / Alerts - Compact */}
+                <div className="pt-2 border-t border-white/10">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/80">Active Alert</p>
+                    {trip.safetyBeacon && userRole === 'owner' && (
+                      <button onClick={handleClearBeacon} className="text-[10px] text-white hover:text-red-100 font-bold underline">
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  {trip.safetyBeacon ? (
+                    <div className="bg-white/10 border border-white/20 p-2.5 rounded-xl flex items-center gap-3 backdrop-blur-sm shadow-sm">
+                      <div className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center shrink-0 shadow-lg animate-pulse">
+                        <span className="text-xs">🆘</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-bold text-xs max-w-[120px]">{trip.safetyBeacon.userName} !</p>
+                        <a
+                          href={`https://www.google.com/maps?q=${trip.safetyBeacon.latitude},${trip.safetyBeacon.longitude}`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="text-[10px] text-white/90 hover:text-white underline decoration-white/50 underline-offset-2 block truncate"
+                        >
+                          View Location &rarr;
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-white/80 flex items-center gap-1.5 italic">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-400/80 shadow-[0_0_8px_rgba(74,222,128,0.6)]"></span> System Active
                     </p>
                   )}
                 </div>
               </div>
-
-              {/* local rules */}
-              <div className="bg-white p-4 sm:p-6 rounded-xl border border-gray-200 shadow-sm">
-                <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-4">💡 Insider Tips</h3>
-                <ul className="space-y-3">
-                  {localRules.length > 0 ? (
-                    localRules.map((rule, i) => (
-                      <li key={i} className="flex gap-2 text-sm text-slate-700">
-                        <span className="text-indigo-500 font-bold">•</span>
-                        <span>
-                          <strong className="text-slate-900">{rule.title}:</strong> {rule.description}
-                        </span>
-                      </li>
-                    ))
-                  ) : (
-                    <li className="text-sm text-slate-500">No tips yet. Generate/recreate the destination profile for richer details.</li>
-                  )}
-                </ul>
-              </div>
             </div>
-          </div>
-        )}
 
-        <SafetyWidget
-          tripId={trip._id}
-          alerts={trip.safety_alerts || []}
-          onAlertsUpdate={(alerts) => setTrip((prev) => ({ ...prev, safety_alerts: alerts }))}
-        />
-
-        {/* BOOKING LINKS */}
-        <BookingCard
-          destinationName={trip.destination.name}
-          nearestStation={accessibility?.nearest_railway?.name}
-        />
-
-        {/* itinerary & map section */}
-        <div className="mt-8 sm:mt-12">
-          <div className="mb-6 sm:mb-8">
-            <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-4">Trip Map</h3>
-            <TripMap destinationName={trip.destination.name} />
-          </div>
-
-          {itinerary.length > 0 ? (
-            <div className="space-y-8">
-              {itinerary.map((dayItem) => {
-                const events = Array.isArray(dayItem?.events) ? dayItem.events : [];
-
-                return (
-                  <div key={dayItem.day} className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
-                      <h2 className="text-lg sm:text-xl font-extrabold text-slate-900">Day {dayItem.day}</h2>
-                      {dayItem.theme && (
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
-                          {dayItem.theme}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="space-y-4">
-                      {events.map((event, idx) => (
-                        <div key={idx} className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start p-3 sm:p-4 bg-slate-50 rounded-xl border border-slate-200">
-                          <div className="text-xs sm:text-sm font-extrabold text-slate-500 w-full sm:w-16 pt-1">
-                            {event.startTime || '—'}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-extrabold text-sm sm:text-base text-slate-900">{event.title}</h4>
-                            <div className="mt-1 flex flex-wrap items-center gap-2">
-                              {event.type && (
-                                <span className="text-[10px] sm:text-[11px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded">
-                                  {event.type}
-                                </span>
-                              )}
-                              {event.endTime && (
-                                <span className="text-[10px] sm:text-[11px] font-bold text-slate-500">until {event.endTime}</span>
-                              )}
-                            </div>
-                            {event.description && (
-                              <p className="mt-2 text-xs sm:text-sm text-slate-700 leading-relaxed">{event.description}</p>
-                            )}
-                          </div>
-                          <div className="text-left sm:text-right text-xs sm:text-sm font-extrabold text-slate-700 w-full sm:w-auto">
-                            {event.cost != null ? (
-                              <span>
-                                {/* Show Currency Code if available, otherwise default to nothing */}
-                                {event.currency || ''} {Number(event.cost).toLocaleString()}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">Free</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-
-                      {events.length === 0 && (
-                        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-600">
-                          No events for this day yet.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="bg-white p-8 sm:p-12 rounded-2xl border border-dashed border-slate-300 text-center">
-              <h3 className="text-lg sm:text-xl font-extrabold text-slate-400 mb-2">Itinerary empty</h3>
-              <p className="text-sm sm:text-base text-slate-500 mb-4 sm:mb-6">Ask the AI to generate your day-by-day plan.</p>
-              <button
-                onClick={() => setShowGenModal(true)}
-                className="px-4 sm:px-6 py-2.5 sm:py-3 bg-indigo-600 text-white text-sm sm:text-base font-extrabold rounded-xl hover:bg-indigo-500 transition"
-              >
-                ✨ Generate itinerary
-              </button>
-            </div>
-          )}
+          </aside>
         </div>
-
-<div className="mt-8 sm:mt-12">
-        <h2 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6">💰 Budget & Expenses</h2>
-        {trip && <ExpenseDashboard trip={trip} setTrip={setTrip} />}
-      </div>
-
       </div>
 
       <ShareTripModal
@@ -561,11 +933,30 @@ export default function TripPage() {
         open={showShareModal}
         onClose={() => setShowShareModal(false)}
         onShared={(updatedTrip) => {
-          if (updatedTrip?._id) {
-            setTrip((prev) => ({ ...prev, ...updatedTrip }));
-          }
+          if (updatedTrip?._id) setTrip((prev) => ({ ...prev, ...updatedTrip }));
         }}
       />
+      <EmergencyFAB
+        number={destination?.emergency?.number || "112"}
+        isOpenProp={showTriggerSOS}
+        onClose={() => setShowTriggerSOS(false)}
+        onShareLocation={handleShareLocation}
+      />
+      {/* SCROLL TO TOP BUTTON */}
+      {/* Positioned above FAB (bottom-24) to avoid overlap */}
+      <button
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        style={{
+          width: '44px',
+          height: '44px',
+          background: '#111827',
+          boxShadow: '0 8px 20px rgba(0,0,0,0.25)'
+        }}
+        className={`fixed bottom-[90px] right-[18px] text-white rounded-full flex items-center justify-center z-40 transition-all duration-300 ${showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}
+        aria-label="Scroll to top"
+      >
+        <ArrowUp className="w-5 h-5" />
+      </button>
 
     </div>
   );

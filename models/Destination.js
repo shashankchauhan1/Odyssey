@@ -17,6 +17,13 @@ const DestinationSchema = new mongoose.Schema({
   currency: { type: String, default: '' },
   language: { type: String, default: '' },
   timezone: { type: String, default: '' },
+  best_time_description: { type: String, default: '' },
+
+  cultural_highlights: { type: [String], default: [] },
+  famous_places: { type: [String], default: [] },
+  local_food: { type: [String], default: [] },
+  safety_tips: { type: [String], default: [] },
+  travel_tips: { type: [String], default: [] },
 
   // if the ai doesn't provide the whole information then it will gonna throw an error, so to solve that issue we use default here
   attractions: { type: mongoose.Schema.Types.Mixed, default: [] },
@@ -25,8 +32,13 @@ const DestinationSchema = new mongoose.Schema({
   local_rules: { type: mongoose.Schema.Types.Mixed, default: [] },
   emergency: { type: mongoose.Schema.Types.Mixed, default: {} },
 
+  // Smart Transport Section
+  transport_info: { type: mongoose.Schema.Types.Mixed, default: {} },
+
   // Media / Language helpers
   video_ids: [{ type: String }],
+
+  smart_tips: { type: [String], default: [] },
 
   essential_phrases: { type: mongoose.Schema.Types.Mixed, default: [] },
 }, { timestamps: true });

@@ -56,11 +56,11 @@ export default function SafetyWidget({ tripId, alerts = [], onAlertsUpdate }) {
   };
 
   return (
-    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-6 shadow-sm">
+    <div style={{"background":"lab(60.3514% 40.5624 87.1228)"}} className="rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-6 shadow-sm">
       <div className="flex items-center justify-between gap-3 mb-4">
         <div>
-          <h3 className="text-sm sm:text-base font-extrabold text-amber-900">Safety Beacon</h3>
-          <p className="text-xs sm:text-sm text-amber-800">Share your latest location with collaborators.</p>
+          <h3 className="text-sm sm:text-base font-extrabold ">Safety Beacon</h3>
+          <p className="text-xs sm:text-sm ">Share your latest location with collaborators.</p>
         </div>
         <span className="text-xl">🛰️</span>
       </div>
