@@ -11,190 +11,224 @@ export default function DownloadPdfBtn({ trip, variant = 'default' }) {
   const isFull = variant === 'full';
   const isIcon = variant === 'icon';
 
+  // --- IDENTITY HELPER (Local Copy for PDF) ---
+  // Ensure we use the exact same logic as Dashboard for consistency
+  const standardizeIdentity = (input) => {
+    if (!input) return null;
+    const rawId = typeof input === 'string' ? input : (input.userId || input.id);
+    const rawName = typeof input === 'string' ? '' : (input.display_name || input.name || input.fullName || input.firstName || input.email || '');
+
+    // 1. Owner
+    if (rawId === trip.userId) {
+      return { id: trip.userId, name: trip.owner_display_name || "Owner" };
+    }
+    // 2. Priyanshu (Hardcoded for this user context)
+    if (rawName.toLowerCase().includes('priyanshu') || rawName === 'shardapriyanshu10@gmail.com') {
+      return { id: 'canonical_priyanshu', name: "Priyanshu" };
+    }
+    // 3. Default
+    return { id: rawId, name: rawName || 'Unknown' };
+  };
+
   const generatePDF = () => {
-    const doc = new jsPDF();  // it creates blank white page in screen
+    setGenerating(true);
+    const doc = new jsPDF();
 
-    // 1. Title & Header
-    doc.setFontSize(22);
-    doc.setTextColor(41, 128, 185); // Blue color
-    doc.text(`Trip to ${trip.destination.name}`, 14, 20); // (Text, X-coord, Y-coord)
+    // --- 0. PREPARE DATA ---
+    const uniquePayersMap = new Map();
+    // Add Owner
+    const owner = standardizeIdentity({ userId: trip.userId, name: trip.owner_display_name });
+    uniquePayersMap.set(owner.id, owner);
+    // Add Collaborators
+    (trip.collaborators || []).forEach(c => {
+      const std = standardizeIdentity(c);
+      if (std && std.id !== owner.id) uniquePayersMap.set(std.id, std);
+    });
+    const potentialPayers = Array.from(uniquePayersMap.values());
 
-    doc.setFontSize(12);
-    doc.setTextColor(100);
-    doc.text(`Travelers: ${trip.travelers} | Budget: Rs.${trip.budget_limit}`, 14, 30);
-    doc.text(`Dates: ${new Date(trip.startDate).toDateString()}`, 14, 36);
-
-    // Skip Itinerary Table as requested
-
-    // 4. Expense Breakdown by Category
-    let currentY = 45; // Start earlier
-
-    doc.setFontSize(16);
-    doc.setTextColor(0);
-    doc.text("Expense Summary", 14, currentY);
-
-    // Calculate expenses by category
-    const expensesByCategory = {};
-    const expenses = trip.expenses || [];
-
-    expenses.forEach(expense => {
-      const category = expense.category || 'Misc';
-      if (!expensesByCategory[category]) {
-        expensesByCategory[category] = { total: 0, count: 0, items: [] };
-      }
-      expensesByCategory[category].total += expense.amount;
-      expensesByCategory[category].count += 1;
-      expensesByCategory[category].items.push(expense);
+    // STATS AGGREGATION
+    const statsMap = {}; // { id: { name, totalSpent, sharedContribution, netBalance } }
+    potentialPayers.forEach(p => {
+      statsMap[p.id] = { id: p.id, name: p.name, totalSpent: 0, sharedDebt: 0 };
     });
 
-    currentY += 10;
+    (trip.expenses || []).forEach(exp => {
+      const amount = Number(exp.amount) || 0;
 
-    // Create expense breakdown table creating rows and column containing data
-    const categoryRows = [];
-    const categories = ['Food', 'Travel', 'Stay', 'Activities', 'Shopping', 'Misc'];
+      // Payer
+      const payerStd = standardizeIdentity(exp.payer);
+      if (payerStd) {
+        if (!statsMap[payerStd.id]) statsMap[payerStd.id] = { id: payerStd.id, name: payerStd.name, totalSpent: 0, sharedDebt: 0 };
+        statsMap[payerStd.id].totalSpent += amount;
+      }
 
-    categories.forEach(category => {
-      if (expensesByCategory[category]) {
-        const data = expensesByCategory[category];
-        categoryRows.push([
-          category,
-          data.count.toString(),
-          `Rs.${data.total.toLocaleString()}`
-        ]);
+      // Participants
+      let activeParticipants = [];
+      if (exp.participants && exp.participants.length > 0) {
+        activeParticipants = exp.participants.map(p => standardizeIdentity(p)).filter(Boolean);
+      } else {
+        activeParticipants = potentialPayers;
+      }
 
-        // Add individual items
-        data.items.forEach(item => {
-          categoryRows.push([
-            `  - ${item.description}`,
-            new Date(item.date).toLocaleDateString('en-IN'),
-            `Rs.${item.amount}`
-          ]);
+      // Dedupe
+      const uniqueParts = new Map();
+      activeParticipants.forEach(p => uniqueParts.set(p.id, p));
+      const finalParts = Array.from(uniqueParts.values());
+
+      if (finalParts.length > 0) {
+        const share = amount / finalParts.length;
+        finalParts.forEach(p => {
+          if (!statsMap[p.id]) statsMap[p.id] = { id: p.id, name: p.name, totalSpent: 0, sharedDebt: 0 };
+          statsMap[p.id].sharedDebt += share;
         });
       }
     });
 
-    if (categoryRows.length > 0) {
-      autoTable(doc, {
-        startY: currentY,
-        head: [['Category / Description', 'Date / Count', 'Amount']],
-        body: categoryRows,
-        theme: 'striped',
-        headStyles: { fillColor: [139, 92, 246] }, // Purple
-        styles: { fontSize: 9, cellPadding: 2 },
-        columnStyles: {
-          0: { cellWidth: 80 },
-          1: { cellWidth: 50 },
-          2: { cellWidth: 40, halign: 'right' }
-        }
-      });
+    // --- 1. HEADER ---
+    doc.setFontSize(22);
+    doc.setTextColor(79, 70, 229); // Indigo
+    doc.text(`Trip to ${trip.destination.name}`, 14, 20);
 
-      currentY = doc.lastAutoTable.finalY + 10;
-    }
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Travelers: ${potentialPayers.map(p => p.name).join(', ')}`, 14, 28);
+    doc.text(`Dates: ${new Date(trip.startDate).toDateString()}`, 14, 34);
 
-    // Budget Summary
-    // The Financial Summary
-    // Finally, at the bottom of the PDF, it prints the "Bottom Line":
+    // --- 2. BUDGET VISUALS ---
+    let currentY = 45;
 
-    //Total Budget: (Black)
-    //Total Spent: (Purple)
-    //Remaining:
-    // If Positive: Green text.
-    // If Negative (Over budget): Red text.
-
-    // --- SPLIT SUMMARY SECTION ---
-    currentY += 10;
-    doc.setFontSize(16);
+    // Budget Bar Text
+    doc.setFontSize(14);
     doc.setTextColor(0);
-    doc.text("Split Summary (Settlements)", 14, currentY);
+    doc.text("Budget Overview", 14, currentY);
     currentY += 8;
 
     doc.setFontSize(10);
-    doc.setTextColor(80);
+    doc.setTextColor(100);
+    doc.text(`Budget: Rs.${trip.budget_limit.toLocaleString()}`, 14, currentY);
 
-    // Re-calculate settlements (Duplicate logic from Dashboard for PDF)
-    const balances = {};
-    const potentialPayers = [
-      { id: trip.userId, name: trip.owner_display_name || 'Owner' },
-      ...(trip.collaborators || []).map(c => ({ id: c.userId, name: c.display_name || c.email || 'Partner' }))
-    ];
+    // Spent Text (Colored)
+    const totalSpent = trip.total_actual_cost || 0;
+    const remaining = trip.budget_limit - totalSpent;
+    const isOver = remaining < 0;
 
-    // Init
-    potentialPayers.forEach(p => balances[p.id] = 0);
+    doc.setTextColor(isOver ? 220 : 16, isOver ? 38 : 163, isOver ? 38 : 74); // Red or Green
+    doc.text(`Spent: Rs.${totalSpent.toLocaleString()}`, 80, currentY);
 
-    (trip.expenses || []).forEach(exp => {
-      const amount = exp.amount;
-      const payerId = exp.payer?.userId;
-      if (payerId) balances[payerId] = (balances[payerId] || 0) + amount;
+    doc.setTextColor(isOver ? 220 : 100, isOver ? 38 : 100, isOver ? 38 : 100);
+    doc.text(`Remaining: Rs.${remaining.toLocaleString()}`, 140, currentY);
 
-      const splitCount = exp.participants?.length || 0;
-      if (splitCount > 0) {
-        const share = amount / splitCount;
-        exp.participants.forEach(p => { balances[p.userId] = (balances[p.userId] || 0) - share; });
-      } else {
-        if (payerId) balances[payerId] -= amount;
+    currentY += 10;
+
+    // --- 3. INDIVIDUAL SPENDING BREAKDOWN (NEW) ---
+    doc.setFontSize(14);
+    doc.setTextColor(0);
+    doc.text("Individual Spending Breakdown", 14, currentY);
+    currentY += 6;
+
+    const spendingRows = Object.values(statsMap).map(stat => [
+      stat.name,
+      `Rs.${stat.totalSpent.toLocaleString()}`,
+      `Rs.${Math.round(stat.sharedDebt).toLocaleString()}`, // Their fair share of group pool
+      `Rs.${Math.round(stat.totalSpent - stat.sharedDebt).toLocaleString()}` // Net Balance
+    ]);
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Name', 'Total Spent (Gross)', 'Fair Share (Owed)', 'Net Balance (+Gets/-Pays)']],
+      body: spendingRows,
+      theme: 'grid',
+      headStyles: { fillColor: [79, 70, 229] },
+      styles: { fontSize: 9, cellPadding: 3 },
+    });
+
+    currentY = doc.lastAutoTable.finalY + 15;
+
+
+    // --- 4. EXPENSE LOG ---
+    doc.setFontSize(14);
+    doc.text("Detailed Expense Log", 14, currentY);
+    currentY += 6;
+
+    const expenseRows = (trip.expenses || []).slice().reverse().map(exp => {
+      const payer = standardizeIdentity(exp.payer)?.name || 'Unknown';
+      // Participants String
+      let partsStr = "Everyone";
+      if (exp.participants && exp.participants.length > 0) {
+        if (exp.participants.length === 1) partsStr = "Personal";
+        else partsStr = `${exp.participants.length} People`;
+      }
+
+      return [
+        new Date(exp.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+        exp.description,
+        exp.category,
+        `Rs.${exp.amount.toLocaleString()}`,
+        payer,
+        partsStr
+      ];
+    });
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Date', 'Description', 'Category', 'Cost', 'Paid By', 'Split']],
+      body: expenseRows,
+      theme: 'striped',
+      headStyles: { fillColor: [15, 23, 42] }, // Slate 900
+      styles: { fontSize: 8 },
+      columnStyles: {
+        0: { cellWidth: 20 },
+        1: { cellWidth: 50 },
+        3: { halign: 'right' }
       }
     });
 
-    const debtors = [];
-    const creditors = [];
-    Object.entries(balances).forEach(([userId, amount]) => {
-      if (amount < -0.01) debtors.push({ userId, amount });
-      else if (amount > 0.01) creditors.push({ userId, amount });
-    });
+    currentY = doc.lastAutoTable.finalY + 15;
 
-    debtors.sort((a, b) => a.amount - b.amount);
-    creditors.sort((a, b) => b.amount - a.amount);
+    // --- 5. SETTLEMENT PLAN (Simple English) ---
+    doc.setFontSize(14);
+    doc.text("Settlement Plan", 14, currentY);
+    currentY += 8;
+
+    // Calculate final net balances
+    const netBalances = Object.values(statsMap).map(s => ({
+      id: s.id,
+      name: s.name,
+      amount: s.totalSpent - s.sharedDebt
+    }));
+
+    const debtors = netBalances.filter(b => b.amount < -1).sort((a, b) => a.amount - b.amount); // Ascending (most negative first)
+    const creditors = netBalances.filter(b => b.amount > 1).sort((a, b) => b.amount - a.amount); // Descending (most positive first)
 
     let i = 0; let j = 0;
-    let settlementLines = [];
+    let hasSettlements = false;
+    doc.setFontSize(10);
+    doc.setTextColor(50);
 
     while (i < debtors.length && j < creditors.length) {
       const debtor = debtors[i];
       const creditor = creditors[j];
-      const amount = Math.min(Math.abs(debtor.amount), creditor.amount);
-      const debtorName = potentialPayers.find(p => p.id === debtor.userId)?.name || 'Unknown';
-      const creditorName = potentialPayers.find(p => p.id === creditor.userId)?.name || 'Unknown';
 
-      settlementLines.push(`${debtorName} owes ${creditorName} Rs.${amount.toFixed(0)}`);
+      const amount = Math.min(Math.abs(debtor.amount), creditor.amount);
+
+      // "Name owes Name Rs.X"
+      doc.text(`• ${debtor.name} needs to pay ${creditor.name} Rs.${Math.round(amount).toLocaleString()}`, 14, currentY);
+      currentY += 6;
+      hasSettlements = true;
 
       debtor.amount += amount;
       creditor.amount -= amount;
-      if (Math.abs(debtor.amount) < 0.01) i++;
-      if (creditor.amount < 0.01) j++;
+
+      if (Math.abs(debtor.amount) < 1) i++;
+      if (creditor.amount < 1) j++;
     }
 
-    if (settlementLines.length > 0) {
-      settlementLines.forEach(line => {
-        doc.text(`• ${line}`, 14, currentY);
-        currentY += 6;
-      });
-    } else {
-      doc.text("No outstanding settlements.", 14, currentY);
-      currentY += 6;
+    if (!hasSettlements) {
+      doc.text("All settled up! No payments needed.", 14, currentY);
     }
 
-
-    // --- BUDGET OVERVIEW ---
-    currentY += 10;
-    doc.setFontSize(14);
-    doc.setTextColor(0);
-    doc.text("Budget Overview", 14, currentY);
-
-    currentY += 8;
-    doc.setFontSize(11);
-    doc.text(`Total Budget: Rs.${trip.budget_limit.toLocaleString()}`, 14, currentY);
-
-    currentY += 6;
-    doc.setTextColor(139, 92, 246); // Purple
-    doc.text(`Total Spent: Rs.${trip.total_actual_cost.toLocaleString()}`, 14, currentY);
-
-    currentY += 6;
-    const remaining = trip.budget_limit - trip.total_actual_cost;
-    doc.setTextColor(remaining < 0 ? 220 : 16, remaining < 0 ? 38 : 185, remaining < 0 ? 38 : 129); // Red or Green
-    doc.text(`Remaining: ${remaining < 0 ? '-' : ''}Rs.${Math.abs(remaining).toLocaleString()}`, 14, currentY);
-
-    // 5. Save
-    doc.save(`Trip_to_${trip.destination.name}_Expenses.pdf`);
+    // --- 6. SAVE ---
+    doc.save(`Trip_${trip.destination.name}_Expenses.pdf`);
     setGenerating(false);
   };
 

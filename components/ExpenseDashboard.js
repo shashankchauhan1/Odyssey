@@ -27,25 +27,96 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
   const [processedPayer, setProcessedPayer] = useState("me"); // 'me' or userId
   const [splitType, setSplitType] = useState("equal");
 
-  // Permissions: Allow if passed role is owner/editor OR if real user checks pass
+
+
+  // --- 1. Identity Standardization System ---
+  // Purpose: Force multiple variations of a user (Email, ID, Name) into ONE single identity.
+  // --- 1. Identity Standardization System ---
+  // Purpose: Force multiple variations of a user (Email, ID, Name) into ONE single identity.
+  // CRITICAL: The ID returned must be STABLE globally (same for all viewers).
+  const standardizeIdentity = (input) => {
+    if (!input) return null;
+
+    const rawId = typeof input === 'string' ? input : (input.userId || input.id);
+    const rawName = typeof input === 'string' ? '' : (input.display_name || input.name || input.fullName || input.firstName || input.email || '');
+    const rawEmail = typeof input === 'string' ? '' : (input.email || '');
+
+    // CHECK 1: OWNER
+    // Always map the Owner to the Trip User ID.
+    // If the input matches the owner's name/ID, force it to trip.userId.
+    if (rawId === trip.userId) {
+      return {
+        id: trip.userId,
+        name: user?.id === trip.userId ? "Me (You)" : (trip.owner_display_name || "Owner"),
+        isMe: user?.id === trip.userId
+      };
+    }
+
+    // CHECK 2: PRIYANSHU (Hardcoded Fix - STABLE ID)
+    if (rawEmail === 'shardapriyanshu10@gmail.com' || rawName.toLowerCase().includes('priyanshu') || rawName === 'shardapriyanshu10@gmail.com') {
+      return {
+        id: 'canonical_priyanshu',
+        name: "Priyanshu",
+        isMe: false // Priyanshu is never "Me" unless he is the owner (handled above if ID matches)
+      };
+    }
+
+    // CHECK 3: CURRENT USER (Dynamic Display Label ONLY)
+    // If this specific input ID matches the logged-in user, mark isMe=true.
+    // BUT DO NOT CHANGE THE ID. The ID must remain the rawId (Clerk ID) so math works.
+    if (rawId === user?.id) {
+      return {
+        id: rawId,
+        name: "Me (You)",
+        isMe: true
+      };
+    }
+
+    // CHECK 4: DEFAULT
+    return {
+      id: rawId,
+      name: rawName || 'Unknown',
+      isMe: false
+    };
+  };
+
+  // --- 2. Generate Unique Payers List ---
+  const uniquePayersMap = new Map();
+
+  // A. Add Owner
+  const owner = standardizeIdentity({ userId: trip.userId, name: trip.owner_display_name });
+  uniquePayersMap.set(owner.id, owner);
+
+  // B. Add Collaborators
+  (trip.collaborators || []).forEach(c => {
+    const std = standardizeIdentity(c);
+    if (std && std.id !== owner.id) { // Prevent adding owner again
+      uniquePayersMap.set(std.id, std);
+    }
+  });
+
+  const potentialPayers = Array.from(uniquePayersMap.values());
+
+  // Selected Participants State
+  const [selectedParticipants, setSelectedParticipants] = useState(potentialPayers.map(p => p.id));
+
+  // Handlers
+  const handleSelectAll = () => setSelectedParticipants(potentialPayers.map(p => p.id));
+  const handleDeselectAll = () => setSelectedParticipants([]);
+
+  // Permissions
   const isViewer = role === 'viewer';
   const canManage = !isViewer;
-
-  // Potential Payers: Owner + Collaborators
-  const potentialPayers = [
-    { id: trip.userId, name: trip.owner_display_name || 'Owner' },
-    ...(trip.collaborators || []).map(c => ({ id: c.userId, name: c.display_name || c.email || 'Partner' }))
-  ];
 
   // ... (existing chart calculations) ...
 
   // Calculate Data for Charts
   const totalSpent = trip.total_actual_cost || 0;
-  const budget = trip.budget_limit || 10000; // Default budget if 0
+  const budget = trip.budget_limit || 10000;
   const remaining = budget - totalSpent;
   const isOverBudget = remaining < 0;
 
-  // Group expenses by category for the Pie Chart
+  // Pie Chart Data
   const chartData = trip.expenses.reduce((acc, curr) => {
     const existing = acc.find(item => item.name === curr.category);
     if (existing) {
@@ -56,79 +127,115 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
     return acc;
   }, []);
 
-  // Split Logic
+  // --- 3. Strict "Net Debt" Algorithm (Participant-Based) ---
   const calculateSettlements = () => {
     if (!trip.expenses || trip.expenses.length === 0) return { status: 'no_expenses' };
 
-    const balances = {};
-    potentialPayers.forEach(p => balances[p.id] = 0);
+    // Step A: Calculate Statistics
+    // Map: CanonicalID -> TotalPaid
+    // We use a stats object to track paid/owed for every canonical user
+    const statsMap = {};
+    potentialPayers.forEach(p => {
+      statsMap[p.id] = { id: p.id, name: p.name, paid: 0, owed: 0 };
+    });
 
     trip.expenses.forEach(exp => {
-      const pid = exp.payer?.userId;
-      const amount = exp.amount;
-      // Payer paid (+)
-      if (pid) balances[pid] = (balances[pid] || 0) + amount;
+      const amount = Number(exp.amount) || 0;
 
-      // Participants owe (-)
-      const participants = exp.participants && exp.participants.length > 0 ? exp.participants : potentialPayers.map(p => ({ userId: p.id })); // Default to all if empty?
-      const count = participants.length;
-      if (count > 0) {
-        const share = amount / count;
-        participants.forEach(p => {
-          balances[p.userId] = (balances[p.userId] || 0) - share;
+      // 1. Identify Payer (Canonical)
+      const rawPayer = exp.payer || {};
+      const payerStd = standardizeIdentity(rawPayer);
+
+      // Safety: Init if missing (shouldn't happen with correct potentialPayers)
+      if (payerStd && !statsMap[payerStd.id]) {
+        statsMap[payerStd.id] = { id: payerStd.id, name: payerStd.name, paid: 0, owed: 0 };
+      }
+
+      if (payerStd) {
+        statsMap[payerStd.id].paid += amount;
+      }
+
+      // 2. Identify Participants (Canonical)
+      // Use explicit participants list if available, else default to ALL (legacy)
+      let activeParticipants = [];
+      if (exp.participants && exp.participants.length > 0) {
+        activeParticipants = exp.participants
+          .map(p => standardizeIdentity(p))
+          .filter(p => p !== null);
+      } else {
+        activeParticipants = potentialPayers; // Legacy: Split among everyone
+      }
+
+      // Deduplicate participants (Safety)
+      const uniqueParticipantsMap = new Map();
+      activeParticipants.forEach(p => uniqueParticipantsMap.set(p.id, p));
+      const finalParticipants = Array.from(uniqueParticipantsMap.values());
+
+      if (finalParticipants.length > 0) {
+        const share = amount / finalParticipants.length;
+        finalParticipants.forEach(p => {
+          if (!statsMap[p.id]) {
+            statsMap[p.id] = { id: p.id, name: p.name, paid: 0, owed: 0 };
+          }
+          statsMap[p.id].owed += share;
         });
       }
     });
 
-    const debtors = [];
-    const creditors = [];
-    Object.entries(balances).forEach(([id, amt]) => {
-      if (amt < -0.1) debtors.push({ id, amt });
-      else if (amt > 0.1) creditors.push({ id, amt });
+    // Step B: Calculate Net Balance
+    const netBalances = [];
+    Object.values(statsMap).forEach(stat => {
+      const net = stat.paid - stat.owed;
+
+      // Filter negligible balances
+      if (Math.abs(net) > 1) {
+        netBalances.push({
+          id: stat.id,
+          name: stat.name,
+          amount: Math.round(net),
+          isPositive: net > 0
+        });
+      }
     });
 
-    // If no significant debts
-    // Only return 'all_settled' if we actually processed expenses but everyone is square.
-    // If balances are empty, it's 'no_expenses' (handled above)
-    if (debtors.length === 0 && creditors.length === 0) return { status: 'all_settled' };
+    // Sort: Positive (Gets Back) first
+    netBalances.sort((a, b) => b.amount - a.amount);
 
-    debtors.sort((a, b) => a.amt - b.amt);
-    creditors.sort((a, b) => b.amt - a.amt);
-
-    const settlements = [];
-    let i = 0, j = 0;
-    while (i < debtors.length && j < creditors.length) {
-      const deb = debtors[i];
-      const cred = creditors[j];
-      const val = Math.min(Math.abs(deb.amt), cred.amt);
-
-      // Find names
-      const dName = potentialPayers.find(p => p.id === deb.id)?.name || 'Unknown';
-      const cName = potentialPayers.find(p => p.id === cred.id)?.name || 'Unknown';
-
-      if (val > 0) {
-        settlements.push({ from: dName, to: cName, val: Math.round(val) });
-      }
-
-      deb.amt += val;
-      cred.amt -= val;
-      if (Math.abs(deb.amt) < 0.1) i++;
-      if (cred.amt < 0.1) j++;
-    }
-
-    return { status: 'settlements', data: settlements };
+    if (netBalances.length === 0) return { status: 'all_settled' };
+    return { status: 'net_balances', data: netBalances };
   };
 
   const settlementResult = calculateSettlements();
+
+  const handleToggleParticipant = (id) => {
+    setSelectedParticipants(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(pId => pId !== id);
+      } else {
+        return [...prev, id];
+      }
+    });
+  };
+
 
   const handleAddExpense = async (e) => {
     e.preventDefault();
     if (!canManage) return;
 
+    if (selectedParticipants.length === 0) {
+      alert("Please select at least one person to split with.");
+      return;
+    }
+
     setLoading(true);
 
     try {
       const payerObj = potentialPayers.find(p => p.id === (processedPayer === 'me' ? user.id : processedPayer));
+
+      // Construct Participants Array based on selection
+      const participantsPayload = potentialPayers
+        .filter(p => selectedParticipants.includes(p.id))
+        .map(p => ({ userId: p.id, name: p.name }));
 
       const payload = {
         description: desc,
@@ -138,7 +245,7 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
           userId: payerObj?.id || user.id,
           name: payerObj?.name || user.fullName || 'User'
         },
-        participants: potentialPayers.map(p => ({ userId: p.id, name: p.name })), // Split with everyone for now
+        participants: participantsPayload,
         splitType
       };
 
@@ -150,11 +257,19 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
 
       const data = await res.json();
       if (data.success) {
-        setTrip(data.data); // Update the parent state instantly
+        // MERGE FIX: Only update expenses/totals to preserve enriched names
+        setTrip(prev => ({
+          ...prev,
+          expenses: data.data.expenses,
+          total_actual_cost: data.data.total_actual_cost,
+          total_estimated_cost: data.data.total_estimated_cost
+        }));
+
         // Reset
         setDesc("");
         setAmount("");
         setCategory("Food");
+        setSelectedParticipants(potentialPayers.map(p => p.id)); // Reset to all
       }
     } catch (err) {
       alert("Failed to add expense");
@@ -177,7 +292,13 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
 
       const data = await res.json();
       if (data.success) {
-        setTrip(data.data); // Update the parent state instantly
+        // MERGE FIX: Only update expenses/totals to preserve enriched names
+        setTrip(prev => ({
+          ...prev,
+          expenses: data.data.expenses,
+          total_actual_cost: data.data.total_actual_cost,
+          total_estimated_cost: data.data.total_estimated_cost
+        }));
       }
     } catch (err) {
       alert("Failed to delete expense");
@@ -185,6 +306,15 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
       setDeleting(null);
     }
   };
+
+  // Helper to filter expenses for display
+  // UPDATED: Show ALL expenses (including personal ones) so everyone has a complete record.
+  const getVisibleExpenses = () => {
+    if (!trip.expenses) return [];
+    return trip.expenses.slice().reverse();
+  };
+
+  const visibleExpenses = getVisibleExpenses();
 
   return (
     <div className="space-y-8">
@@ -325,21 +455,39 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
             </div>
 
             <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-              {trip.expenses?.length > 0 ? trip.expenses.slice().reverse().map((expense, i) => (
+              {visibleExpenses.length > 0 ? visibleExpenses.map((expense, i) => (
                 <div key={expense._id || i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-white hover:shadow-md transition-all group">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-lg shadow-sm">
                       {CATEGORY_ICONS[expense.category] || '💰'}
                     </div>
                     <div>
-                      <p className="font-bold text-slate-900 text-sm">{expense.description}</p>
+                      <p className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                        {expense.description}
+                        {/* Label: Personal vs Shared */}
+                        {expense.participants && expense.participants.length === 1 ? (
+                          <span className="text-[9px] bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded border border-indigo-100">Personal</span>
+                        ) : (
+                          <span className="text-[9px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded border border-slate-200">Shared</span>
+                        )}
+                      </p>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
                           {new Date(expense.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                         </span>
-                        {expense.payer?.name && (
+                        {(expense.payer?.userId || expense.payer?.name) && (
                           <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600 font-bold">
-                            by {expense.payer.name.split(' ')[0]}
+                            by {(() => {
+                              const rawPayer = expense.payer || {};
+                              const match = standardizeIdentity(rawPayer);
+                              return (match && match.isMe) ? 'Me' : (match ? match.name.split(' ')[0] : (rawPayer.name || 'Unknown'));
+                            })()}
+                          </span>
+                        )}
+                        {/* Show count of participants if not everyone */}
+                        {expense.participants && expense.participants.length > 0 && expense.participants.length < potentialPayers.length && (
+                          <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-bold">
+                            {expense.participants.length} 👤
                           </span>
                         )}
                       </div>
@@ -351,7 +499,7 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
                       <button
                         onClick={() => handleDeleteExpense(expense._id)}
                         disabled={deleting === expense._id}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition-all opacity-0 group-hover:opacity-100"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
                       >
                         {deleting === expense._id ? "..." : <Trash2 className="w-4 h-4" />}
                       </button>
@@ -369,7 +517,6 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
               )}
             </div>
           </div>
-
         </div>
 
         {/* RIGHT COLUMN (Add Form & Splits) - Spans 5 cols */}
@@ -435,6 +582,32 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
                   </div>
                 </div>
 
+                {/* Participant Selection */}
+                <div className="pt-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest ml-1">Split With</label>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={handleSelectAll} className="text-[10px] font-bold text-indigo-500 hover:text-indigo-600">All</button>
+                      <button type="button" onClick={handleDeselectAll} className="text-[10px] font-bold text-slate-400 hover:text-slate-500">None</button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2 rounded-xl border border-slate-100 max-h-32 overflow-y-auto">
+                    {potentialPayers.map(p => (
+                      <div key={p.id}
+                        className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all border ${selectedParticipants.includes(p.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-transparent hover:bg-slate-100'}`}
+                        onClick={() => handleToggleParticipant(p.id)}
+                      >
+                        <div className={`w-4 h-4 rounded-full flex items-center justify-center border ${selectedParticipants.includes(p.id) ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300'}`}>
+                          {selectedParticipants.includes(p.id) && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                        </div>
+                        <span className={`text-xs font-bold truncate ${selectedParticipants.includes(p.id) ? 'text-indigo-700' : 'text-slate-600'}`}>
+                          {p.id === user?.id ? "Me" : p.name.split(' ')[0]}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-3 pt-2">
                   <button
                     type="button"
@@ -491,33 +664,33 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
               </div>
             )}
 
-            {settlementResult.status === 'settlements' && (
+            {settlementResult.status === 'net_balances' && (
               <div className="space-y-3">
-                {settlementResult.data.map((s, idx) => (
+                {settlementResult.data.map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-sm shadow-sm">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600">
-                        {s.from.charAt(0)}
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold ${item.isPositive ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        {item.name.charAt(0)}
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-bold text-slate-700 leading-tight">{s.from}</span>
-                        <span className="text-slate-400 text-[10px] lowercase">owes</span>
+                        <span className="font-bold text-slate-700 leading-tight">{item.name}</span>
+                        <span className={`text-[10px] lowercase font-bold ${item.isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
+                          {item.isPositive ? 'gets back' : 'owes'}
+                        </span>
                       </div>
                     </div>
 
                     <div className="flex flex-col items-end">
-                      <span className="font-black text-slate-900">₹{s.val}</span>
-                      <span className="text-[10px] text-slate-400">to {s.to}</span>
+                      <span className={`font-black ${item.isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {item.isPositive ? '+' : '-'}₹{Math.abs(item.amount)}
+                      </span>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-
           </div>
-
         </div>
-
       </div>
     </div>
   );

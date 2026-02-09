@@ -1,14 +1,27 @@
 'use client';
 import { Phone, AlertTriangle, Cross } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-export default function EmergencyFAB({ number = "112", isOpenProp, onClose, onShareLocation, emergencyNumbers }) {
+import { getEmergencyNumbers } from '../constants/emergencyData';
+
+export default function EmergencyFAB({ destination, isOpenProp, onClose, onShareLocation }) {
     const [isOpen, setIsOpen] = useState(false);
     const [sharing, setSharing] = useState(false);
-    const [shareStatus, setShareStatus] = useState(null); // 'success' | 'error' | null
+    const [shareStatus, setShareStatus] = useState(null);
+    const [currentNumbers, setCurrentNumbers] = useState(getEmergencyNumbers("Global"));
+    const [locationName, setLocationName] = useState("Global");
 
     const show = isOpenProp !== undefined ? isOpenProp : isOpen;
     const setShow = onClose || setIsOpen;
+
+    // Resolve numbers based on Destination Prop
+    useEffect(() => {
+        if (destination) {
+            const data = getEmergencyNumbers(destination);
+            setCurrentNumbers(data);
+            setLocationName(data.country);
+        }
+    }, [destination]);
 
     const handleSOS = () => {
         if (!navigator.geolocation) {
@@ -39,9 +52,9 @@ export default function EmergencyFAB({ number = "112", isOpenProp, onClose, onSh
     };
 
     const contacts = [
-        { name: "Police", number: emergencyNumbers?.police || "100", icon: "👮" },
-        { name: "Ambulance", number: emergencyNumbers?.ambulance || "102", icon: "🚑" },
-        { name: "Fire", number: emergencyNumbers?.fire || "101", icon: "🚒" },
+        { name: "Police", number: currentNumbers.police, icon: "👮" },
+        { name: "Ambulance", number: currentNumbers.ambulance, icon: "🚑" },
+        { name: "Fire", number: currentNumbers.fire, icon: "🚒" },
     ];
 
     return (
@@ -97,7 +110,10 @@ export default function EmergencyFAB({ number = "112", isOpenProp, onClose, onSh
 
                 {/* Emergency Contacts Card */}
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-2 w-[220px] overflow-hidden">
-                    <p className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-100 mb-1">Emergency Call</p>
+                    <div className="px-3 py-2 border-b border-slate-100 mb-1 flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Emergency Call</span>
+                        <span className="text-[9px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{locationName}</span>
+                    </div>
                     {contacts.map((contact, i) => (
                         <a
                             key={i}

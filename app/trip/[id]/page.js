@@ -754,17 +754,21 @@ export default function TripPage() {
                     <p className="text-[10px] text-slate-500">{trip.owner_email}</p>
                   </div>
                 </div>
-                {trip.collaborators?.map((c, i) => (
-                  <div key={i} className="flex items-center gap-3 p-1.5">
-                    <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-[10px] ring-2 ring-white shadow-sm">
-                      {(c.email || 'C').charAt(0)}
+                {trip.collaborators?.map((c, i) => {
+                  const displayName = c.name || c.fullName || c.firstName || c.email || 'Traveler';
+                  const initial = displayName.charAt(0).toUpperCase();
+                  return (
+                    <div key={i} className="flex items-center gap-3 p-1.5">
+                      <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-[10px] ring-2 ring-white shadow-sm">
+                        {initial}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 truncate">{displayName}</p>
+                        <p className="text-[9px] text-indigo-500 font-bold uppercase tracking-wider">Traveler</p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-900 truncate">{c.email}</p>
-                      <p className="text-[9px] text-indigo-500 font-bold uppercase tracking-wider">Traveler</p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 <button onClick={() => setShowShareModal(true)} className="w-full py-3 mt-2 border border-dashed border-slate-300 rounded-xl text-xs font-bold text-slate-500 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2">
                   <Plus className="w-3.5 h-3.5" /> Invite Friends
                 </button>

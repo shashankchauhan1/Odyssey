@@ -165,14 +165,25 @@ export default function TransportTabs({ transportInfo, destinationName, nearestS
         displayDuration = `~${distDisplay} ${unitLabel} away`;
         displayCost = "Check App"; // Reset cost as static data is irrelevant
 
+        // Mode-specific Logic
         if (activeTab === 'flight') {
-            displayNote = `Approx ${distDisplay}${unitLabel}. Check flights from your nearest airport.`;
+            const flightTime = Math.round((calculatedDistance / 700) * 10) / 10; // ~700km/h
+            const airport = "International Airport"; // Mock
+            displayDuration = `~${flightTime}h flight`;
+            displayNote = `Nearest airport is approx ${distDisplay}${unitLabel}. Flights available daily.`;
+        } else if (activeTab === 'train') {
+            const trainTime = Math.round((calculatedDistance / 80) * 10) / 10; // ~80km/h
+            const station = nearestStation || "Central Station";
+            displayDuration = `~${trainTime}h by train`;
+            displayNote = `Route to ${station}. Trains typically run every few hours.`;
+        } else if (activeTab === 'bus') {
+            const busTime = Math.round((calculatedDistance / 50) * 10) / 10; // ~50km/h
+            displayDuration = `~${busTime}h by bus`;
+            displayNote = `Direct buses available. Expect stops along the way.`;
         } else if (activeTab === 'car') {
-            const roughHours = Math.round(calculatedDistance / 60); // assuming 60km/h avg
-            displayDuration = `~${distDisplay} ${unitLabel} (${roughHours}h drive)`;
-            displayNote = "Drive time varies by traffic. Click to view route.";
-        } else {
-            displayNote = `Distance is ~${distDisplay}${unitLabel}. Check schedules below.`;
+            const carTime = Math.round((calculatedDistance / 60) * 10) / 10; // ~60km/h
+            displayDuration = `~${carTime}h drive`;
+            displayNote = `Drive via main highway. Traffic may affect duration.`;
         }
     }
 
