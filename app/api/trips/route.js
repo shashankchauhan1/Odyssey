@@ -105,10 +105,29 @@ export async function POST(request) {
       }
     }
 
+    // 2.5 Geocode for Country
+    let country = '';
+    try {
+      // Use resolved destination name
+      const nameToSearch = destination.name;
+      const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(nameToSearch)}&format=json&limit=1`, {
+        headers: { 'User-Agent': 'Odyssey/1.0' }
+      });
+      const geoData = await geoRes.json();
+      if (geoData && geoData.length > 0) {
+        // display_name format: "Kedarnath, Rudraprayag, Uttarakhand, 246445, India"
+        const parts = geoData[0].display_name.split(', ');
+        country = parts[parts.length - 1]; // Last part is usually country
+      }
+    } catch (err) {
+      console.error("Geocoding failed:", err);
+    }
+
     // 3. Create Trip
     const newTrip = await Trip.create({
       userId: userId,
       destination: destination._id,
+      country: country, // Saving detected country
       startDate: new Date(startDate || Date.now()),
       budget_limit: budget || 10000,
       travelers: travelers || 1,

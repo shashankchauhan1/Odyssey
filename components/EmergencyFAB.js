@@ -1,6 +1,6 @@
 'use client';
 import { Phone, AlertTriangle, Cross } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import { getEmergencyNumbers } from '../constants/emergencyData';
 
@@ -57,20 +57,28 @@ export default function EmergencyFAB({ destination, isOpenProp, onClose, onShare
         { name: "Fire", number: currentNumbers.fire, icon: "🚒" },
     ];
 
+    const hoverTimeout = useRef(null);
+
+    const handleMouseEnter = () => {
+        if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
+            if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+            setShow(true);
+        }
+    };
+
+    const handleMouseLeave = () => {
+        if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
+            hoverTimeout.current = setTimeout(() => {
+                setShow(false);
+            }, 300); // 300ms delay for smoother interaction
+        }
+    };
+
     return (
         <div
             className="fixed bottom-4 right-4 z-[9999]"
-            onMouseEnter={() => {
-                // Check if device supports hover (desktop/laptop)
-                if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
-                    setShow(true);
-                }
-            }}
-            onMouseLeave={() => {
-                if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
-                    setShow(false);
-                }
-            }}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
         >
             {/* FAB Button */}
             <button
@@ -138,6 +146,7 @@ export default function EmergencyFAB({ destination, isOpenProp, onClose, onShare
                 <div
                     className="fixed inset-0 z-30 bg-black/20 backdrop-blur-[1px] lg:hidden"
                     onClick={(e) => {
+                        // console.log("clicked");
                         e.stopPropagation();
                         setShow(false);
                     }}

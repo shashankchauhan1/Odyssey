@@ -8,6 +8,8 @@ const TripSchema = new mongoose.Schema({
     ref: 'Destination',
     required: true
   },
+  country: { type: String, default: '' },
+  countryCode: { type: String, default: '' },
 
   startDate: Date,
   endDate: Date,

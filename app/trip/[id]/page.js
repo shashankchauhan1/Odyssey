@@ -197,9 +197,23 @@ export default function TripPage() {
   const handleShareLocation = async (lat, lng) => {
     setSharingLocation(true);
     try {
+      // NAME RESOLUTION LOGIC
+      let resolvedName = "Traveler";
+      if (userRole === 'owner') {
+        const rawName = trip.owner_display_name || 'Owner';
+        // If email, extract name
+        if (rawName.includes('@')) {
+          resolvedName = rawName.split('@')[0];
+          // Capitalize
+          resolvedName = resolvedName.charAt(0).toUpperCase() + resolvedName.slice(1);
+        } else {
+          resolvedName = rawName;
+        }
+      }
+
       const beaconData = {
-        userId: userRole === 'owner' ? 'owner_id' : 'traveler_id', // Mock IDs
-        userName: userRole === 'owner' ? (trip.owner_display_name || 'Owner') : 'Traveler',
+        userId: userRole === 'owner' ? 'owner_id' : 'traveler_id',
+        userName: resolvedName,
         latitude: lat,
         longitude: lng,
         timestamp: Date.now()
@@ -918,24 +932,47 @@ export default function TripPage() {
 
                   {(trip.safetyBeacons && trip.safetyBeacons.length > 0) ? (
                     <div className="space-y-2 max-h-[100px] overflow-y-auto pr-1 custom-scrollbar">
-                      {trip.safetyBeacons.map((beacon, idx) => (
-                        <div key={idx} className="bg-white/10 border border-white/20 p-2.5 rounded-xl flex items-center gap-3 backdrop-blur-sm shadow-sm">
-                          <div className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center shrink-0 shadow-lg animate-pulse">
-                            <span className="text-xs">🆘</span>
+                      {trip.safetyBeacons.map((beacon, idx) => {
+                        // Resolve Name Dynamically from Clerk Data if possible
+                        let displayName = beacon.userName;
+
+                        // 1. Check if Owner
+                        if (beacon.userId === 'owner_id' || beacon.userId === trip.userId) {
+                          displayName = trip.owner_display_name || 'Owner';
+                        }
+                        // 2. Check Collaborators
+                        else {
+                          const collaborator = trip.collaborators?.find(c => c.userId === beacon.userId || c.userId === 'traveler_id'); // Mock check
+                          if (collaborator?.display_name) {
+                            displayName = collaborator.display_name;
+                          }
+                        }
+
+                        // 3. Email Fallback Parsing (if it still looks like an email)
+                        if (displayName && displayName.includes('@')) {
+                          displayName = displayName.split('@')[0];
+                          displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+                        }
+
+                        return (
+                          <div key={idx} className="bg-white/10 border border-white/20 p-2.5 rounded-xl flex items-center gap-3 backdrop-blur-sm shadow-sm">
+                            <div className="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center shrink-0 shadow-lg animate-pulse">
+                              <span className="text-xs">🆘</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white font-bold text-xs max-w-[120px] truncate">{displayName} !</p>
+                              <a
+                                href={`https://www.google.com/maps?q=${beacon.latitude},${beacon.longitude}`}
+                                target="_blank" rel="noopener noreferrer"
+                                className="text-[10px] text-white/90 hover:text-white underline decoration-white/50 underline-offset-2 block truncate"
+                              >
+                                View Location &rarr;
+                              </a>
+                              <p className="text-[9px] text-white/60 mt-0.5">{new Date(beacon.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white font-bold text-xs max-w-[120px] truncate">{beacon.userName} !</p>
-                            <a
-                              href={`https://www.google.com/maps?q=${beacon.latitude},${beacon.longitude}`}
-                              target="_blank" rel="noopener noreferrer"
-                              className="text-[10px] text-white/90 hover:text-white underline decoration-white/50 underline-offset-2 block truncate"
-                            >
-                              View Location &rarr;
-                            </a>
-                            <p className="text-[9px] text-white/60 mt-0.5">{new Date(beacon.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   ) : (
                     <p className="text-[10px] text-white/80 flex items-center gap-1.5 italic">
@@ -959,10 +996,11 @@ export default function TripPage() {
         }}
       />
       <EmergencyFAB
-        number={destination?.emergency?.number || "112"}
-        emergencyNumbers={destination?.emergency}
-        isOpenProp={showTriggerSOS}
-        onClose={() => setShowTriggerSOS(false)}
+        destination={{
+          name: trip.destination.name,
+          country: trip.country,
+          countryCode: trip.countryCode // New ISO code
+        }}
         onShareLocation={handleShareLocation}
       />
       {/* SCROLL TO TOP BUTTON */}
