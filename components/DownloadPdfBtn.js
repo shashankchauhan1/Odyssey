@@ -6,29 +6,13 @@ import autoTable from 'jspdf-autotable';
 import { useState } from 'react';
 import { Loader2, Download, FileText } from 'lucide-react';
 
+import { standardizeIdentity } from '@/lib/identityUtils';
+
 export default function DownloadPdfBtn({ trip, variant = 'default' }) {
   const [generating, setGenerating] = useState(false);
   const isFull = variant === 'full';
   const isIcon = variant === 'icon';
 
-  // --- IDENTITY HELPER (Local Copy for PDF) ---
-  // Ensure we use the exact same logic as Dashboard for consistency
-  const standardizeIdentity = (input) => {
-    if (!input) return null;
-    const rawId = typeof input === 'string' ? input : (input.userId || input.id);
-    const rawName = typeof input === 'string' ? '' : (input.display_name || input.name || input.fullName || input.firstName || input.email || '');
-
-    // 1. Owner
-    if (rawId === trip.userId) {
-      return { id: trip.userId, name: trip.owner_display_name || "Owner" };
-    }
-    // 2. Priyanshu (Hardcoded for this user context)
-    if (rawName.toLowerCase().includes('priyanshu') || rawName === 'shardapriyanshu10@gmail.com') {
-      return { id: 'canonical_priyanshu', name: "Priyanshu" };
-    }
-    // 3. Default
-    return { id: rawId, name: rawName || 'Unknown' };
-  };
 
   const generatePDF = () => {
     setGenerating(true);
@@ -37,11 +21,13 @@ export default function DownloadPdfBtn({ trip, variant = 'default' }) {
     // --- 0. PREPARE DATA ---
     const uniquePayersMap = new Map();
     // Add Owner
-    const owner = standardizeIdentity({ userId: trip.userId, name: trip.owner_display_name });
-    uniquePayersMap.set(owner.id, owner);
+    // For PDF, we don't 'Me' anyone, we want real names. So we pass null as currentUserId.
+    const owner = standardizeIdentity({ userId: trip.userId, name: trip.owner_display_name }, trip.userId, null);
+    if (owner) uniquePayersMap.set(owner.id, owner);
+
     // Add Collaborators
     (trip.collaborators || []).forEach(c => {
-      const std = standardizeIdentity(c);
+      const std = standardizeIdentity(c, trip.userId, null);
       if (std && std.id !== owner.id) uniquePayersMap.set(std.id, std);
     });
     const potentialPayers = Array.from(uniquePayersMap.values());
@@ -56,7 +42,7 @@ export default function DownloadPdfBtn({ trip, variant = 'default' }) {
       const amount = Number(exp.amount) || 0;
 
       // Payer
-      const payerStd = standardizeIdentity(exp.payer);
+      const payerStd = standardizeIdentity(exp.payer, trip.userId, null);
       if (payerStd) {
         if (!statsMap[payerStd.id]) statsMap[payerStd.id] = { id: payerStd.id, name: payerStd.name, totalSpent: 0, sharedDebt: 0 };
         statsMap[payerStd.id].totalSpent += amount;
@@ -65,7 +51,7 @@ export default function DownloadPdfBtn({ trip, variant = 'default' }) {
       // Participants
       let activeParticipants = [];
       if (exp.participants && exp.participants.length > 0) {
-        activeParticipants = exp.participants.map(p => standardizeIdentity(p)).filter(Boolean);
+        activeParticipants = exp.participants.map(p => standardizeIdentity(p, trip.userId, null)).filter(Boolean);
       } else {
         activeParticipants = potentialPayers;
       }
@@ -75,7 +61,9 @@ export default function DownloadPdfBtn({ trip, variant = 'default' }) {
       activeParticipants.forEach(p => uniqueParts.set(p.id, p));
       const finalParts = Array.from(uniqueParts.values());
 
-      if (finalParts.length > 0) {
+      const isPersonal = finalParts.length === 1;
+
+      if (finalParts.length > 0 && !isPersonal) {
         const share = amount / finalParts.length;
         finalParts.forEach(p => {
           if (!statsMap[p.id]) statsMap[p.id] = { id: p.id, name: p.name, totalSpent: 0, sharedDebt: 0 };
@@ -151,7 +139,7 @@ export default function DownloadPdfBtn({ trip, variant = 'default' }) {
     currentY += 6;
 
     const expenseRows = (trip.expenses || []).slice().reverse().map(exp => {
-      const payer = standardizeIdentity(exp.payer)?.name || 'Unknown';
+      const payer = standardizeIdentity(exp.payer, trip.userId, null)?.name || 'Unknown';
       // Participants String
       let partsStr = "Everyone";
       if (exp.participants && exp.participants.length > 0) {
@@ -227,8 +215,79 @@ export default function DownloadPdfBtn({ trip, variant = 'default' }) {
       doc.text("All settled up! No payments needed.", 14, currentY);
     }
 
-    // --- 6. SAVE ---
-    doc.save(`Trip_${trip.destination.name}_Expenses.pdf`);
+    // --- 6. DETAILED ITINERARY (Bento Structure) ---
+    if (trip.itinerary && trip.itinerary.length > 0) {
+      doc.addPage();
+      currentY = 20;
+
+      doc.setFontSize(18);
+      doc.setTextColor(79, 70, 229);
+      doc.text("Detailed Itinerary & AI Suggestions", 14, currentY);
+      currentY += 10;
+
+      trip.itinerary.forEach((day, index) => {
+        // Page break check
+        if (currentY > 250) { doc.addPage(); currentY = 20; }
+
+        doc.setFontSize(14);
+        doc.setTextColor(0);
+        doc.setDrawColor(79, 70, 229);
+        doc.line(14, currentY, 14, currentY + 6); // visual marker
+        doc.text(`Day ${day.day}: ${day.theme || 'Exploration'}`, 18, currentY + 5);
+        currentY += 12;
+
+        const processSlot = (label, data) => {
+          if (!data) return;
+          if (currentY > 260) { doc.addPage(); currentY = 20; }
+
+          doc.setFontSize(10);
+          doc.setTextColor(100);
+          doc.text(`[${label}] ${data.title}`, 18, currentY);
+          currentY += 5;
+
+          doc.setFontSize(9);
+          doc.setTextColor(150);
+          const descLines = doc.splitTextToSize(data.description || '', 170);
+          doc.text(descLines, 18, currentY);
+          currentY += (descLines.length * 4) + 2;
+
+          if (data.proTip || data.logistics_tip) {
+            doc.setTextColor(79, 70, 229);
+            doc.text(`Tip: ${data.proTip || data.logistics_tip}`, 18, currentY);
+            currentY += 5;
+          }
+
+          if (data.cost > 0) {
+            doc.setTextColor(34, 197, 94); // Green
+            doc.text(`Est. Cost: ${data.currency} ${data.cost}`, 18, currentY);
+            currentY += 6;
+          } else {
+            currentY += 2;
+          }
+        };
+
+        const acts = day.activities || {};
+
+        // 1. New Structure (Morning/Afternoon/Evening objects)
+        if (acts.morning || acts.afternoon || acts.evening) {
+          if (acts.morning) processSlot("Morning", acts.morning);
+          if (acts.afternoon) processSlot("Afternoon", acts.afternoon);
+          if (acts.evening) processSlot("Evening", acts.evening);
+        }
+        // 2. Fallback for Old Data (Array based or Events)
+        else if (Array.isArray(acts)) {
+          acts.forEach(activity => processSlot(activity.time || "Activity", activity));
+        }
+        else if (day.events) {
+          day.events.forEach(e => processSlot(e.timeBlock || "Event", e));
+        }
+
+        currentY += 5; // Spacing between days
+      });
+    }
+
+    // --- 7. SAVE ---
+    doc.save(`Trip_${trip.destination.name}_Plan.pdf`);
     setGenerating(false);
   };
 

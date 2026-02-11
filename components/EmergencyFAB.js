@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 
 import { getEmergencyNumbers } from '../constants/emergencyData';
 
-export default function EmergencyFAB({ destination, isOpenProp, onClose, onShareLocation }) {
+export default function EmergencyFAB({ trip, destination, isOpenProp, onClose, onShareLocation }) {
     const [isOpen, setIsOpen] = useState(false);
     const [sharing, setSharing] = useState(false);
     const [shareStatus, setShareStatus] = useState(null);
@@ -14,14 +14,29 @@ export default function EmergencyFAB({ destination, isOpenProp, onClose, onShare
     const show = isOpenProp !== undefined ? isOpenProp : isOpen;
     const setShow = onClose || setIsOpen;
 
-    // Resolve numbers based on Destination Prop
+    // Resolve numbers based on Trip Info (Gemini) OR Destination Prop (Legacy)
     useEffect(() => {
-        if (destination) {
+        // Priority 1: Gemini Data (Stored in Trip)
+        if (trip?.emergencyInfo?.numbers && (trip.emergencyInfo.numbers.police || trip.emergencyInfo.numbers.ambulance)) {
+            setCurrentNumbers(trip.emergencyInfo.numbers);
+            setLocationName(trip.emergencyInfo.country || "Local");
+        }
+        // Priority 2: Gemini Country Detection (but default numbers logic)
+        else if (trip?.emergencyInfo?.country === "India" || trip?.country === "India" || destination?.country === "India" || (destination?.name && destination.name.includes("India"))) {
+            setCurrentNumbers({
+                police: "100",
+                ambulance: "102",
+                fire: "101"
+            });
+            setLocationName("India");
+        }
+        else if (destination) {
+            // Priority 3: Legacy Lookup
             const data = getEmergencyNumbers(destination);
             setCurrentNumbers(data);
             setLocationName(data.country);
         }
-    }, [destination]);
+    }, [trip, destination]);
 
     const handleSOS = () => {
         if (!navigator.geolocation) {

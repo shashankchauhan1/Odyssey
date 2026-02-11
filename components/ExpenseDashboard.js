@@ -15,6 +15,8 @@ const CATEGORY_ICONS = {
   'Misc': '✨'
 };
 
+import { standardizeIdentity } from '@/lib/identityUtils';
+
 export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
   const { user } = useUser();
   const [loading, setLoading] = useState(false);
@@ -28,68 +30,18 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
   const [splitType, setSplitType] = useState("equal");
 
 
-
-  // --- 1. Identity Standardization System ---
-  // Purpose: Force multiple variations of a user (Email, ID, Name) into ONE single identity.
-  // --- 1. Identity Standardization System ---
-  // Purpose: Force multiple variations of a user (Email, ID, Name) into ONE single identity.
-  // CRITICAL: The ID returned must be STABLE globally (same for all viewers).
-  const standardizeIdentity = (input) => {
-    if (!input) return null;
-
-    const rawId = typeof input === 'string' ? input : (input.userId || input.id);
-    const rawName = typeof input === 'string' ? '' : (input.display_name || input.name || input.fullName || input.firstName || input.email || '');
-    const rawEmail = typeof input === 'string' ? '' : (input.email || '');
-
-    // CHECK 1: OWNER
-    // Always map the Owner to the Trip User ID.
-    // If the input matches the owner's name/ID, force it to trip.userId.
-    if (rawId === trip.userId) {
-      return {
-        id: trip.userId,
-        name: user?.id === trip.userId ? "Me (You)" : (trip.owner_display_name || "Owner"),
-        isMe: user?.id === trip.userId
-      };
-    }
-
-    // CHECK 2: PRIYANSHU (Hardcoded Fix - STABLE ID)
-    if (rawEmail === 'shardapriyanshu10@gmail.com' || rawName.toLowerCase().includes('priyanshu') || rawName === 'shardapriyanshu10@gmail.com') {
-      return {
-        id: 'canonical_priyanshu',
-        name: "Priyanshu",
-        isMe: false // Priyanshu is never "Me" unless he is the owner (handled above if ID matches)
-      };
-    }
-
-    // CHECK 3: CURRENT USER (Dynamic Display Label ONLY)
-    // If this specific input ID matches the logged-in user, mark isMe=true.
-    // BUT DO NOT CHANGE THE ID. The ID must remain the rawId (Clerk ID) so math works.
-    if (rawId === user?.id) {
-      return {
-        id: rawId,
-        name: "Me (You)",
-        isMe: true
-      };
-    }
-
-    // CHECK 4: DEFAULT
-    return {
-      id: rawId,
-      name: rawName || 'Unknown',
-      isMe: false
-    };
-  };
-
   // --- 2. Generate Unique Payers List ---
   const uniquePayersMap = new Map();
 
   // A. Add Owner
-  const owner = standardizeIdentity({ userId: trip.userId, name: trip.owner_display_name });
-  uniquePayersMap.set(owner.id, owner);
+  // Pass current user ID to get "Me" label if applicable
+  const currentUserId = user?.id;
+  const owner = standardizeIdentity({ userId: trip.userId, name: trip.owner_display_name }, trip.userId, currentUserId);
+  if (owner) uniquePayersMap.set(owner.id, owner);
 
   // B. Add Collaborators
   (trip.collaborators || []).forEach(c => {
-    const std = standardizeIdentity(c);
+    const std = standardizeIdentity(c, trip.userId, currentUserId);
     if (std && std.id !== owner.id) { // Prevent adding owner again
       uniquePayersMap.set(std.id, std);
     }
@@ -144,7 +96,7 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
 
       // 1. Identify Payer (Canonical)
       const rawPayer = exp.payer || {};
-      const payerStd = standardizeIdentity(rawPayer);
+      const payerStd = standardizeIdentity(rawPayer, trip.userId, currentUserId);
 
       // Safety: Init if missing (shouldn't happen with correct potentialPayers)
       if (payerStd && !statsMap[payerStd.id]) {
@@ -155,23 +107,30 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
         statsMap[payerStd.id].paid += amount;
       }
 
+
+
       // 2. Identify Participants (Canonical)
       // Use explicit participants list if available, else default to ALL (legacy)
       let activeParticipants = [];
       if (exp.participants && exp.participants.length > 0) {
         activeParticipants = exp.participants
-          .map(p => standardizeIdentity(p))
+          .map(p => standardizeIdentity(p, trip.userId, currentUserId))
           .filter(p => p !== null);
       } else {
         activeParticipants = potentialPayers; // Legacy: Split among everyone
       }
+
+      // SELECTIVE SPLITTING LOGIC: 
+      // If only 1 participant, it's a PERSONAL expense. 
+      // It counts for "Paid" stats but NOT for "Shared Debt".
+      const isPersonal = activeParticipants.length === 1;
 
       // Deduplicate participants (Safety)
       const uniqueParticipantsMap = new Map();
       activeParticipants.forEach(p => uniqueParticipantsMap.set(p.id, p));
       const finalParticipants = Array.from(uniqueParticipantsMap.values());
 
-      if (finalParticipants.length > 0) {
+      if (finalParticipants.length > 0 && !isPersonal) {
         const share = amount / finalParticipants.length;
         finalParticipants.forEach(p => {
           if (!statsMap[p.id]) {
@@ -187,7 +146,7 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
     Object.values(statsMap).forEach(stat => {
       const net = stat.paid - stat.owed;
 
-      // Filter negligible balances
+      // Filter negligible balances AND verify they are part of the group
       if (Math.abs(net) > 1) {
         netBalances.push({
           id: stat.id,
@@ -479,7 +438,7 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
                           <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600 font-bold">
                             by {(() => {
                               const rawPayer = expense.payer || {};
-                              const match = standardizeIdentity(rawPayer);
+                              const match = standardizeIdentity(rawPayer, trip.userId, currentUserId);
                               return (match && match.isMe) ? 'Me' : (match ? match.name.split(' ')[0] : (rawPayer.name || 'Unknown'));
                             })()}
                           </span>
@@ -499,7 +458,7 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
                       <button
                         onClick={() => handleDeleteExpense(expense._id)}
                         disabled={deleting === expense._id}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                       >
                         {deleting === expense._id ? "..." : <Trash2 className="w-4 h-4" />}
                       </button>
@@ -673,7 +632,9 @@ export default function ExpenseDashboard({ trip, setTrip, role = 'owner' }) {
                         {item.name.charAt(0)}
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-bold text-slate-700 leading-tight">{item.name}</span>
+                        <span className="font-bold text-slate-700 leading-tight">
+                          {item.name === user?.id ? "Me" : (item.name || "Traveler")}
+                        </span>
                         <span className={`text-[10px] lowercase font-bold ${item.isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
                           {item.isPositive ? 'gets back' : 'owes'}
                         </span>

@@ -11,6 +11,17 @@ const TripSchema = new mongoose.Schema({
   country: { type: String, default: '' },
   countryCode: { type: String, default: '' },
 
+  // New: Global Emergency Info from Gemini
+  emergencyInfo: {
+    country: String,
+    countryCode: String,
+    numbers: {
+      police: String,
+      ambulance: String,
+      fire: String
+    }
+  },
+
   startDate: Date,
   endDate: Date,
   travelers: { type: Number, default: 1 },
@@ -35,16 +46,11 @@ const TripSchema = new mongoose.Schema({
   // We use Mixed here to prevent crashes if the AI changes the format slightly called CaseErrors
   itinerary: [{
     day: Number,
-    events: [{
-      type: { type: String },
-      title: String,
-      startTime: String,
-      endTime: String,
-      cost: Number,
-      status: { type: String, default: "Planned" },
-      description: String,
-      details: mongoose.Schema.Types.Mixed
-    }]
+    theme: String, // New field
+
+    // New Flat Activity Structure - Relaxed for AI flexibility
+    activities: [mongoose.Schema.Types.Mixed],
+    events: [mongoose.Schema.Types.Mixed] // Keep for backup/legacy compatibility
   }],
 
   packing_list: [{ item: String, is_packed: { type: Boolean, default: false } }],

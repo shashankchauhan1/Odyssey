@@ -119,16 +119,28 @@ export async function PUT(request, { params }) {
   try {
     await connectDB();
     const { userId } = await auth();
+    const user = await currentUser();
+    const email = user?.primaryEmailAddress?.emailAddress?.toLowerCase?.();
     const { id } = await params;
     const body = await request.json();
 
-    // 1. Geocode if destinationName changes (or just to be safe)
+    // 1. Fetch Trip to check permissions
+    const trip = await Trip.findById(id);
+    if (!trip) {
+      return NextResponse.json({ success: false, error: "Trip not found" }, { status: 404 });
+    }
+
+    const isOwner = trip.userId === userId;
+    const isCollaborator = trip.collaborators?.some((c) => c.userId === userId || (email && c.email?.toLowerCase() === email));
+
+    if (!isOwner && !isCollaborator) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    // 2. Geocode if destinationName changes
     let countryUpdate = {};
     if (body.destinationName || body.destination) {
-      // Note: In a real app, we'd check if it actually changed. 
-      // For now, if passed, we try to detect country.
       const nameToSearch = body.destinationName || (typeof body.destination === 'string' ? body.destination : '');
-
       if (nameToSearch) {
         try {
           const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(nameToSearch)}&format=json&limit=1`, {
@@ -146,16 +158,13 @@ export async function PUT(request, { params }) {
       }
     }
 
-    // 2. Perform Update
-    const updatedTrip = await Trip.findOneAndUpdate(
-      { _id: id, userId }, // Ensure ownership
+    // 3. Perform Update
+    // We use findByIdAndUpdate without the userId constraint because we already verified permissions above
+    const updatedTrip = await Trip.findByIdAndUpdate(
+      id,
       { $set: { ...body, ...countryUpdate } },
       { new: true }
     );
-
-    if (!updatedTrip) {
-      return NextResponse.json({ success: false, error: "Trip not found or unauthorized" }, { status: 404 });
-    }
 
     return NextResponse.json({ success: true, data: updatedTrip });
 

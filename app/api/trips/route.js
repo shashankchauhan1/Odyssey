@@ -3,7 +3,7 @@ import connectDB from '@/lib/db';
 import Trip from '@/models/Trip';
 import Destination from '@/models/Destination';
 import { auth, currentUser } from '@clerk/nextjs/server';
-import { generateDestinationProfile } from '@/lib/groqClient';
+import { generateDestinationProfile, getGroqClient } from '@/lib/groqClient';
 import {
   defaultDestinationProfile,
   mergeNonEmpty,
@@ -105,22 +105,54 @@ export async function POST(request) {
       }
     }
 
-    // 2.5 Geocode for Country
+    // 2.5 Geocode for Country & Gemini Emergency Info
     let country = '';
+    let emergencyData = null;
+
     try {
       // Use resolved destination name
       const nameToSearch = destination.name;
-      const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(nameToSearch)}&format=json&limit=1`, {
-        headers: { 'User-Agent': 'Odyssey/1.0' }
-      });
-      const geoData = await geoRes.json();
-      if (geoData && geoData.length > 0) {
-        // display_name format: "Kedarnath, Rudraprayag, Uttarakhand, 246445, India"
-        const parts = geoData[0].display_name.split(', ');
-        country = parts[parts.length - 1]; // Last part is usually country
+
+      // A. Groq Logic (Replaces Gemini)
+      try {
+        const groq = getGroqClient();
+
+        const prompt = `Given the destination '${nameToSearch}', return a JSON object with the Country Name, ISO Country Code, and the local emergency numbers for Police, Ambulance, and Fire. 
+        ENSURE you find specific local numbers (e.g., 100 for Police in India, 911 in US).
+        Format: { "country": "Name", "countryCode": "ISO", "numbers": { "police": "123", "ambulance": "123", "fire": "123" } }`;
+
+        const completion = await groq.chat.completions.create({
+          messages: [{ role: 'user', content: prompt }],
+          model: 'llama-3.3-70b-versatile',
+          response_format: { type: 'json_object' },
+        });
+
+        const text = completion.choices[0]?.message?.content || "";
+        const jsonStr = text.replace(/```json|```/g, '').trim();
+        emergencyData = JSON.parse(jsonStr);
+
+        if (emergencyData && emergencyData.country) {
+          country = emergencyData.country;
+        }
+      } catch (groqError) {
+        console.error("Groq Emergency Fetch Failed:", groqError);
+        // Fallback to basic geocoding if Groq fails
+      }
+
+      // B. Fallback Geocoding (if country still empty)
+      if (!country) {
+        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(nameToSearch)}&format=json&limit=1`, {
+          headers: { 'User-Agent': 'Odyssey/1.0' }
+        });
+        const geoData = await geoRes.json();
+        if (geoData && geoData.length > 0) {
+          // display_name format: "Kedarnath, Rudraprayag, Uttarakhand, 246445, India"
+          const parts = geoData[0].display_name.split(', ');
+          country = parts[parts.length - 1]; // Last part is usually country
+        }
       }
     } catch (err) {
-      console.error("Geocoding failed:", err);
+      console.error("Geocoding/Emergency failed:", err);
     }
 
     // 3. Create Trip
@@ -128,6 +160,7 @@ export async function POST(request) {
       userId: userId,
       destination: destination._id,
       country: country, // Saving detected country
+      emergencyInfo: emergencyData, // Saving Gemini data
       startDate: new Date(startDate || Date.now()),
       budget_limit: budget || 10000,
       travelers: travelers || 1,

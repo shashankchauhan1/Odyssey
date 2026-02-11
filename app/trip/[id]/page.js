@@ -26,6 +26,7 @@ import TransportTabs from '@/components/TransportTabs';
 import QuickActions from '@/components/QuickActions';
 import SmartTipsWidget from '@/components/SmartTipsWidget';
 import TripSettingsModal from '@/components/TripSettingsModal';
+import ItineraryTimeline from '@/components/ItineraryTimeline';
 import { Settings } from 'lucide-react';
 
 // Load the map ONLY on the client side
@@ -71,8 +72,8 @@ export default function TripPage() {
           if (localData) {
             const parsedLocal = JSON.parse(localData);
             // If we have a local beacon but server has none, keep local
-            if (parsedLocal.safetyBeacon && !tripData.safetyBeacon) {
-              tripData.safetyBeacon = parsedLocal.safetyBeacon;
+            if (parsedLocal.safetyBeacons && (!tripData.safetyBeacons || tripData.safetyBeacons.length === 0)) {
+              tripData.safetyBeacons = parsedLocal.safetyBeacons;
             }
           }
         } catch (e) {
@@ -164,6 +165,9 @@ export default function TripPage() {
     e.preventDefault();
     setLoading(true);
     setShowGenModal(false);
+
+    console.log("🚀 Starting generation for Trip:", trip._id);
+
     try {
       const res = await fetch('/api/trips/generate', {
         method: 'POST',
@@ -175,10 +179,25 @@ export default function TripPage() {
           interests: genOptions.interests
         })
       });
+
       const json = await res.json();
-      if (json.success) setTrip(json.data);
+
+      if (json.success) {
+        // Performance: Prevent duplicate state updates
+        if (JSON.stringify(json.data) !== JSON.stringify(trip)) {
+          console.log("✅ Generation Successful:", json.data);
+          setTrip(json.data);
+        } else {
+          console.log("✅ Generation Successful (Data Unchanged)");
+        }
+      } else {
+        // This will catch the 500 error details from your route.js
+        console.error("❌ Server Error Details:", json.error);
+        alert(`Generation Error: ${json.error}`);
+      }
     } catch (err) {
-      alert("Failed to generate plan");
+      console.error("🌐 Network/Frontend Error:", err);
+      alert("Failed to connect to the generation service.");
     } finally {
       setLoading(false);
     }
@@ -231,8 +250,12 @@ export default function TripPage() {
       // 2. Persist to LocalStorage
       localStorage.setItem(`trip_data_${id}`, JSON.stringify(updatedTrip));
 
-      // 3. Persist to DB (Mock)
-      // await fetch(`/api/trips/${id}`, { method: 'PUT', body: JSON.stringify({ safetyBeacons: updatedBeacons }) });
+      // 3. Persist to DB (Real)
+      await fetch(`/api/trips/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ safetyBeacons: updatedBeacons })
+      });
 
       console.log("SOS Beacon Activated:", beaconData);
 
@@ -260,6 +283,13 @@ export default function TripPage() {
 
       // 2. Clear Persistence
       localStorage.setItem(`trip_data_${id}`, JSON.stringify(updatedTrip));
+
+      // 3. Persist to DB (Real) - Clear from Backend
+      await fetch(`/api/trips/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ safetyBeacons: updatedBeacons })
+      });
 
       console.log("SOS Beacon Cleared for user:", currentUserId);
     } catch (err) {
@@ -686,54 +716,32 @@ export default function TripPage() {
               </div>
             </section>
 
-            {/* 5. Itinerary & Events (Accordion) */}
+            {/* 5. Itinerary Timeline (New Premium UI) */}
             <section className="space-y-6">
-              <h2 className="text-xl font-bold text-slate-900 px-1 flex items-center gap-2">
-                <div className="p-1.5 bg-purple-100 rounded-lg text-purple-600"><Calendar className="w-5 h-5" /></div>
-                Trip Schedule
-              </h2>
-              <Accordion defaultOpen="itinerary">
-                <AccordionItem value="itinerary" title="Daily Itinerary" icon="📅">
-                  {itinerary.length > 0 ? (
-                    <div className="space-y-6 relative before:absolute before:left-3 before:top-4 before:bottom-4 before:w-px before:bg-indigo-100 before:hidden sm:before:block pl-1">
-                      {itinerary.map((dayItem) => (
-                        <div key={dayItem.day} className="relative sm:pl-10">
-                          <div className="hidden sm:flex absolute left-0 top-0 w-6 h-6 rounded-full bg-indigo-600 text-white items-center justify-center font-bold text-xs ring-4 ring-white shadow-sm z-10 transition-transform hover:scale-110">
-                            {dayItem.day}
-                          </div>
-                          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 hover:border-indigo-200 hover:shadow-sm transition-all">
-                            <div className="flex justify-between items-center mb-3">
-                              <h3 className="font-bold text-slate-900 text-base">Day {dayItem.day}</h3>
-                              {dayItem.theme && <span className="text-[10px] font-bold text-indigo-600 bg-white border border-indigo-100 px-2 py-0.5 rounded-full shadow-sm">{dayItem.theme}</span>}
-                            </div>
-                            <div className="space-y-3">
-                              {dayItem.events?.map((event, idx) => (
-                                <div key={idx} className="bg-white p-3.5 rounded-xl border border-slate-100 shadow-sm flex flex-col sm:flex-row gap-3 items-start hover:shadow-md transition-shadow">
-                                  <div className="shrink-0 pt-0.5">
-                                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded block text-center min-w-[60px]">{event.startTime}</span>
-                                  </div>
-                                  <div>
-                                    <h4 className="font-bold text-slate-900 text-sm">{event.title}</h4>
-                                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">{event.description}</p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                      <Calendar className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                      <p className="text-slate-500 mb-4 font-medium text-sm">No Itinerary Created Yet</p>
-                      <button onClick={() => setShowGenModal(true)} className="px-6 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-xs shadow-lg shadow-slate-200 hover:bg-slate-800 transition-colors">
-                        ✨ Generate Itinerary
-                      </button>
-                    </div>
-                  )}
-                </AccordionItem>
 
+              <Accordion defaultOpen="schedule">
+                <AccordionItem value="schedule" title="Trip Schedule" icon="📅">
+                  <div className="pt-2">
+                    <div className="flex items-center justify-between px-1 mb-4">
+                      <span className="text-xs font-medium text-slate-400">Detailed Daily Itinerary</span>
+                      {!itinerary || itinerary.length === 0 && (
+                        <button onClick={() => setShowGenModal(true)} className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-full">
+                          ✨ Generate Plan
+                        </button>
+                      )}
+                    </div>
+
+                    <ItineraryTimeline
+                      key={trip.updatedAt || new Date().toISOString()}
+                      itinerary={itinerary}
+                      destinationName={trip.destination.name}
+                    />
+                  </div>
+                </AccordionItem>
+              </Accordion>
+
+              {/* Events Fallback or Addition */}
+              <Accordion defaultOpen="events">
                 <AccordionItem value="events" title="Upcoming Events" icon="🎉">
                   <EventsList destinationName={trip.destination.name} />
                 </AccordionItem>
@@ -764,12 +772,12 @@ export default function TripPage() {
                     {(trip.owner_display_name || 'O').charAt(0)}
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-900">Owner</p>
-                    <p className="text-[10px] text-slate-500">{trip.owner_email}</p>
+                    <p className="text-xs font-bold text-slate-900">{trip.owner_display_name || 'Trip Owner'}</p>
+                    <p className="text-[10px] text-slate-500">Owner</p>
                   </div>
                 </div>
                 {trip.collaborators?.map((c, i) => {
-                  const displayName = c.name || c.fullName || c.firstName || c.email || 'Traveler';
+                  const displayName = c.display_name || c.fullName || c.name || c.firstName || 'Traveler';
                   const initial = displayName.charAt(0).toUpperCase();
                   return (
                     <div key={i} className="flex items-center gap-3 p-1.5">
