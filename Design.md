@@ -1,8 +1,7 @@
 # Requirement and Design Document
 
 ## 1. Title & Metadata
-**Project Name:** Odyssey - AI-Powered Travel Suite  
-**Date & Version:** v1.0 (March 26, 2026)  
+**Project Name:** Odyssey - AI-Powered Trip Planner
 **Tech Stack Summary:** Next.js (App Router), MongoDB, Mongoose, Groq SDK, Clerk, Tailwind CSS.
 
 ## 2. Problem Statement & Goals
@@ -16,7 +15,7 @@ Modern travel planning is highly fragmented. Users typically juggle multiple app
 *   **SOS Beacon:** Provide a global, context-aware emergency beacon that surfaces country-specific numbers based on real-time location.
 
 ### Non-Functional Goals
-*   **Low Latency for AI:** Optimize response times by utilizing fast models (e.g., Groq) and aggressive query caching.
+*   **Low Latency for AI:** Optimize response times by utilizing fast models (e.g., Groq).
 *   **Mobile Responsiveness:** Ensure responsive fluid layouts specifically designed for travelers on the move via smartphones.
 *   **Data Security:** Utilize Clerk for robust identity management and ensure user data is perfectly protected end-to-end.
 
