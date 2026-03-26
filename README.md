@@ -13,7 +13,7 @@
 ## 3. Specifications
 
 ### Technology Stack
-*   **Frontend Framework:** Next.js 16 (App Router) & React 19.
+*   **Framework:** Next.js
 *   **Styling & UI:** Tailwind CSS, featuring modern dynamic components and a structured Bento-Grid layout for itineraries. Icons provided by Lucide-React. Data visualization via Recharts.
 *   **Authentication & Identity:** Clerk middleware for secure user authentication and precise route protection.
 *   **Database:** MongoDB, orchestrated via Mongoose with structured schemas for `Trips` and `Destinations`.
